@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -O3 -DNDEBUG -shared -Wl,-soname,ml_inspector.so -o ml_inspector.so CMakeFiles/ml_inspector.dir/src/ml_inspector.cc.o  /home/emirhan/snort_src/libml/build/libml_static.a -ldl -lpthread 

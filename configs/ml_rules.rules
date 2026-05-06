@@ -1,0 +1,1 @@
+alert ( gid:300; sid:1; rev:1; msg:"ML LSTM anomaly detected"; classtype:misc-activity; )

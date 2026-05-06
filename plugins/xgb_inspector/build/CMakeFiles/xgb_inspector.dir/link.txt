@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -O3 -DNDEBUG -shared -Wl,-soname,xgb_inspector.so -o xgb_inspector.so CMakeFiles/xgb_inspector.dir/src/xgb_inspector.cc.o  -Wl,-rpath,/home/emirhan/snort_src/xgboost/lib: /home/emirhan/snort_src/xgboost/lib/libxgboost.so -ldl -lpthread 

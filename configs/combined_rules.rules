@@ -1,0 +1,9 @@
+# Community rules
+include /usr/local/etc/snort/rules/snort3-community-rules/snort3-community.rules
+
+# LSTM stub — plugin get_rules() ile GID=300 register eder
+# Bu satır sadece GID=300'ü aktifleştirir, duplicate değildir
+alert ( gid:300; sid:1; rev:1; msg:"ML LSTM anomaly detected"; classtype:misc-activity; )
+
+# XGBoost stub — GID=301
+alert ip any any -> any any ( gid:301; sid:1; rev:1; msg:"XGBoost anomaly detected"; classtype:misc-activity; )
