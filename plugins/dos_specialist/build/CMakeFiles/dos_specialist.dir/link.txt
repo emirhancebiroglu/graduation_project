@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -O3 -DNDEBUG -shared -Wl,-soname,dos_specialist.so -o dos_specialist.so CMakeFiles/dos_specialist.dir/src/dos_specialist_inspector.cc.o   -L/usr/local/lib  -Wl,-rpath,/usr/local/lib -lxgboost 

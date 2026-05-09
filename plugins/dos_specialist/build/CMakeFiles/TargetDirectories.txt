@@ -1,0 +1,3 @@
+/home/emirhan/bitirme/plugins/dos_specialist/build/CMakeFiles/dos_specialist.dir
+/home/emirhan/bitirme/plugins/dos_specialist/build/CMakeFiles/edit_cache.dir
+/home/emirhan/bitirme/plugins/dos_specialist/build/CMakeFiles/rebuild_cache.dir

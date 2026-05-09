@@ -1,0 +1,1 @@
+alert ip any any -> any any ( msg:"XGBoost anomaly detected"; gid:302; sid:1; rev:1; classtype:misc-activity; )
