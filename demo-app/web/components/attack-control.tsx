@@ -58,57 +58,75 @@ export function AttackControl({ snortRunning, onStarting }: Props) {
   }
 
   return (
-    <div className="relative p-4 flex flex-col gap-4" style={{
-      border: "1px solid rgba(0,212,255,0.12)",
+    <div className="relative overflow-hidden" style={{
+      border: "1px solid rgba(0,212,255,0.1)",
       background: "#0f1318",
-      minHeight: "140px",
     }}>
-      <div className="absolute top-0 left-0 w-3 h-3 border-t border-l" style={{ borderColor: "rgba(0,212,255,0.3)" }} />
-      <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r" style={{ borderColor: "rgba(0,212,255,0.3)" }} />
-
-      <p className="section-label" style={{ color: "rgba(0,212,255,0.5)" }}>REPLAY CONTROL</p>
+      <div className="absolute top-0 left-0 w-3 h-3 border-t border-l" style={{ borderColor: "rgba(0,212,255,0.2)" }} />
+      <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r" style={{ borderColor: "rgba(0,212,255,0.2)" }} />
 
       {!snortRunning ? (
         <button
           disabled={loading !== null}
           onClick={handleStart}
-          className="relative group flex items-center gap-3 px-4 py-3 text-left transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-full flex items-center gap-4 px-5 py-4 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           style={{
-            border: "1px solid rgba(0,212,255,0.3)",
-            background: "rgba(0,212,255,0.05)",
-            boxShadow: "0 0 20px rgba(0,212,255,0.08), inset 0 0 20px rgba(0,212,255,0.02)",
+            background: "rgba(0,212,255,0.04)",
+            borderBottom: "1px solid rgba(0,212,255,0.08)",
           }}
         >
           {loading === "full_wednesday" ? (
-            <span className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin shrink-0" style={{ borderColor: "#00d4ff", borderTopColor: "transparent" }} />
+            <span className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin shrink-0" style={{ borderColor: "#00d4ff", borderTopColor: "transparent" }} />
           ) : (
-            <div className="w-6 h-6 flex items-center justify-center shrink-0" style={{ border: "1px solid rgba(0,212,255,0.4)", background: "rgba(0,212,255,0.1)" }}>
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="#00d4ff">
-                <polygon points="2,1 9,5 2,9" />
+            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ border: "1px solid rgba(0,212,255,0.4)", background: "rgba(0,212,255,0.08)" }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <polygon points="3,1 12,7 3,13" fill="#00d4ff" />
               </svg>
             </div>
           )}
-          <div>
-            <p className="text-xs font-mono font-medium" style={{ color: "#00d4ff" }}>FULL WEDNESDAY PCAP</p>
-            <p className="text-[10px] font-mono mt-0.5" style={{ color: "rgba(100,116,139,0.7)" }}>~180s wall-clock · click to begin</p>
+          <div className="text-left">
+            <p className="text-sm font-mono font-semibold" style={{ color: "#00d4ff", letterSpacing: "0.05em" }}>ANALYZE WEDNESDAY PCAP</p>
+            <p className="text-[10px] font-mono mt-0.5" style={{ color: "rgba(100,116,139,0.5)" }}>CIC-IDS2017 Wednesday-WorkingHours · click to start analysis</p>
+          </div>
+          <div className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-sm" style={{ border: "1px solid rgba(0,212,255,0.15)", background: "rgba(0,212,255,0.05)" }}>
+            <span className="text-[9px] font-mono" style={{ color: "rgba(0,212,255,0.5)" }}>~180s</span>
           </div>
         </button>
       ) : (
-        <button
-          disabled={loading === "stop"}
-          onClick={handleStop}
-          className="flex items-center gap-3 px-4 py-2.5 text-left transition-all disabled:opacity-40"
-          style={{ border: "1px solid rgba(100,116,139,0.2)", background: "rgba(100,116,139,0.04)" }}
-        >
-          <div className="w-5 h-5 flex items-center justify-center shrink-0">
+        <div className="relative px-5 py-4 flex items-center gap-4" style={{ borderBottom: "1px solid rgba(100,116,139,0.1)" }}>
+          <div className="relative shrink-0">
+            <div className="radar-sweep w-8 h-8 rounded-full" style={{ border: "1px solid rgba(0,212,255,0.3)", background: "rgba(0,212,255,0.05)" }}>
+              <div className="radar-sweep-inner absolute inset-0 rounded-full" style={{ background: "conic-gradient(from 0deg, transparent 0deg, rgba(0,212,255,0.4) 30deg, transparent 60deg)" }} />
+            </div>
+            <style>{`
+              @keyframes radarSweep {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+              }
+              .radar-sweep-inner {
+                animation: radarSweep 2s linear infinite;
+                transform-origin: center;
+              }
+            `}</style>
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-mono font-semibold" style={{ color: "#00d4ff" }}>ANALYSIS IN PROGRESS</p>
+            <p className="text-[10px] font-mono mt-0.5" style={{ color: "rgba(100,116,139,0.5)" }}>Snort inspector running · alerts being processed</p>
+          </div>
+          <button
+            disabled={loading === "stop"}
+            onClick={handleStop}
+            className="flex items-center gap-2 px-3 py-2 rounded-sm transition-all disabled:opacity-40"
+            style={{ border: "1px solid rgba(255,59,59,0.25)", background: "rgba(255,59,59,0.05)" }}
+          >
             {loading === "stop" ? (
               <span className="w-3 h-3 rounded-full border border-t-transparent animate-spin" style={{ borderColor: "#64748b", borderTopColor: "transparent" }} />
             ) : (
-              <div className="w-2.5 h-2.5" style={{ background: "#64748b" }} />
+              <div className="w-2.5 h-2.5" style={{ background: "#ff3b3b" }} />
             )}
-          </div>
-          <span className="text-xs font-mono" style={{ color: "#64748b" }}>STOP REPLAY</span>
-        </button>
+            <span className="text-[10px] font-mono" style={{ color: "#ff3b3b" }}>STOP</span>
+          </button>
+        </div>
       )}
     </div>
   );

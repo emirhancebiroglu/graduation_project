@@ -143,17 +143,17 @@ export default function Page() {
 
       {/* ── MAIN CONTENT ── */}
       <div className="flex-1 p-5 flex flex-col gap-4">
+        {/* ROI / Impact — hero section, most prominent */}
+        <ImpactSummary evaluation={evaluation} />
+
+        {/* Performance Metrics */}
+        <EvaluationReport evaluation={evaluation} />
+
         {/* Replay Control */}
         <AttackControl
           snortRunning={effectiveRunning}
           onStarting={(v) => setIsStarting(v)}
         />
-
-        {/* Evaluation Report */}
-        <EvaluationReport evaluation={evaluation} />
-
-        {/* Impact Summary */}
-        <ImpactSummary evaluation={evaluation} />
       </div>
 
       {/* Footer */}
