@@ -8,7 +8,7 @@ import { ImpactSummary } from "@/components/impact-summary";
 export default function Page() {
   const stream = useIdsStream();
   const [isStarting, setIsStarting] = useState(false);
-  const { connected, snortRunning, pcapProgress, replayPhase, evaluation } = stream;
+  const { connected, snortRunning, pcapProgress, replayPhase, evaluation, recentAlerts } = stream;
 
   const [clockStr, setClockStr] = useState<string | null>(null);
   useEffect(() => {
@@ -134,9 +134,24 @@ export default function Page() {
           </span>
 
           {replayPhase === "running" && (
-            <span className="ml-4 section-label text-[0.6rem]" style={{ color: "rgba(0,212,255,0.35)" }}>
-              {Math.round(pcapProgress * 100)}% PCAP PROCESSED
-            </span>
+            <div
+              className="absolute inset-x-0 bottom-0"
+              style={{ height: "3px", overflow: "hidden" }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: "100%",
+                  width: `${Math.round(pcapProgress * 100)}%`,
+                  background: "linear-gradient(90deg, #00d4ff 0%, #00d4ff 85%, rgba(0,212,255,0.2) 100%)",
+                  boxShadow: "0 0 12px rgba(0,212,255,0.7), 0 0 4px rgba(0,212,255,0.5)",
+                  transition: "width 0.4s ease",
+                }}
+              />
+            </div>
           )}
         </div>
       )}
@@ -144,7 +159,7 @@ export default function Page() {
       {/* ── MAIN CONTENT ── */}
       <div className="flex-1 p-5 flex flex-col gap-4">
         {/* ROI / Impact — hero section, most prominent */}
-        <ImpactSummary evaluation={evaluation} />
+        <ImpactSummary evaluation={evaluation} replayPhase={replayPhase} pcapProgress={pcapProgress} recentAlerts={recentAlerts} />
 
         {/* Performance Metrics */}
         <EvaluationReport evaluation={evaluation} />

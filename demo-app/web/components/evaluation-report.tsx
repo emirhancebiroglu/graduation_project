@@ -103,17 +103,76 @@ export function EvaluationReport({ evaluation }: Props) {
   if (!evaluation) {
     return (
       <div className="relative overflow-hidden" style={{ border: "1px solid rgba(0,212,255,0.1)", background: "#0f1318" }}>
+        <style>{`
+          @keyframes skeletonPulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 0.8; }
+          }
+          .skel { animation: skeletonPulse 1.5s ease-in-out infinite; }
+        `}</style>
         <div className="absolute top-0 left-0 w-3 h-3 border-t border-l z-10" style={{ borderColor: "rgba(0,212,255,0.3)" }} />
         <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r z-10" style={{ borderColor: "rgba(0,212,255,0.3)" }} />
-        <div className="flex items-center justify-center py-8">
-          <div className="text-center space-y-2">
-            <div className="flex items-center justify-center">
-              <div className="w-3 h-3 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "rgba(0,212,255,0.4)", borderTopColor: "transparent" }} />
-            </div>
-            <span className="section-label" style={{ color: "rgba(0,212,255,0.3)" }}>
-              PERFORMANCE METRICS WILL APPEAR HERE
-            </span>
+
+        <div className="flex items-center gap-3 px-5 py-2.5 border-b" style={{ borderColor: "rgba(0,212,255,0.06)" }}>
+          <div className="w-1 h-3.5 skel" style={{ background: "rgba(0,212,255,0.6)" }} />
+          <div>
+            <span className="section-label text-[10px]" style={{ color: "#00d4ff" }}>PERFORMANCE METRICS — WEDNESDAY CIC-IDS2017</span>
           </div>
+        </div>
+
+        <div className="p-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 skel" style={{ background: "#ff3b3b", borderRadius: "50%" }} />
+                <span className="section-label text-[9px]" style={{ color: "#ff3b3b" }}>XGBOOST INSPECTOR</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                {["TP","FP","FN","TN"].map(v => (
+                  <div key={v} className="flex flex-col items-center justify-center p-2.5 relative skel"
+                    style={{ border: "1px solid rgba(0,212,255,0.08)", background: "rgba(0,212,255,0.03)", minWidth: "72px", minHeight: "40px" }}>
+                    <span className="text-[9px] font-mono mb-1" style={{ color: "rgba(0,212,255,0.25)" }}>{v}</span>
+                    <span className="text-xs font-mono font-semibold tabular-nums" style={{ color: "rgba(0,212,255,0.25)", minWidth: "40px", display: "inline-block" }}>---</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 skel" style={{ background: "#00d4ff", borderRadius: "50%" }} />
+                <span className="section-label text-[9px]" style={{ color: "#00d4ff" }}>SNORT3 COMMUNITY</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                {["TP","FP","FN","TN"].map(v => (
+                  <div key={v} className="flex flex-col items-center justify-center p-2.5 relative skel"
+                    style={{ border: "1px solid rgba(0,212,255,0.08)", background: "rgba(0,212,255,0.03)", minWidth: "72px", minHeight: "40px" }}>
+                    <span className="text-[9px] font-mono mb-1" style={{ color: "rgba(0,212,255,0.25)" }}>{v}</span>
+                    <span className="text-xs font-mono font-semibold tabular-nums" style={{ color: "rgba(0,212,255,0.25)", minWidth: "40px", display: "inline-block" }}>---</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-3 space-y-0" style={{ borderColor: "rgba(0,212,255,0.06)" }}>
+            <div className="flex items-center gap-3 pb-1.5 border-b" style={{ borderColor: "rgba(0,212,255,0.05)" }}>
+              <span className="section-label w-16 shrink-0 text-[9px] skel" style={{ color: "rgba(100,116,139,0.3)" }}>METRIC</span>
+              <span className="flex-1 section-label text-[9px] skel" style={{ color: "rgba(255,59,59,0.3)" }}>XGB</span>
+              <span className="flex-1 section-label text-[9px] skel" style={{ color: "rgba(0,212,255,0.3)" }}>COMM</span>
+            </div>
+            {["Accuracy","Precision","Recall","F1-Score","FPR"].map(label => (
+              <div key={label} className="flex items-center gap-4 py-2 border-b last:border-0 skel"
+                style={{ borderColor: "rgba(0,212,255,0.04)" }}>
+                <span className="section-label w-16 shrink-0 text-[9px]" style={{ color: "rgba(100,116,139,0.3)" }}>{label}</span>
+                <div className="flex-1 h-px skel" style={{ background: "rgba(0,212,255,0.1)" }} />
+                <div className="flex-1 h-px skel" style={{ background: "rgba(0,212,255,0.1)" }} />
+              </div>
+            ))}
+          </div>
+
+          <p className="section-label text-[9px] pt-2 border-t skel" style={{ color: "rgba(100,116,139,0.2)", borderColor: "rgba(0,212,255,0.04)" }}>
+            AWAITING ANALYSIS...
+          </p>
         </div>
       </div>
     );
