@@ -1,6 +1,7 @@
 "use client";
 import type { EvaluationResult, Alert } from "@/lib/types";
 import type { ReplayPhase } from "@/lib/use-ids-stream";
+import { motion } from "framer-motion";
 
 type Props = {
   evaluation: EvaluationResult | null;
@@ -27,38 +28,40 @@ function FpBar({ label, value, max, color }: { label: string; value: number; max
 }
 
 function RealAlertTerminal({ alerts }: { alerts: Alert[] }) {
-  const display = alerts.length > 0 ? alerts.slice(0, 8) : null;
-
-  if (!display) {
-    return (
-      <div className="font-mono text-[9px] leading-relaxed space-y-0.5" style={{ color: "rgba(0,212,255,0.35)" }}>
-        <div style={{ color: "rgba(100,116,139,0.4)" }}>Awaiting detection data...</div>
-      </div>
-    );
-  }
+  const display = alerts.length > 0 ? alerts.slice(-8) : [];
 
   return (
     <div
       className="font-mono text-[9px] leading-relaxed space-y-0.5"
       style={{ color: "rgba(0,212,255,0.55)" }}
     >
-      {display.map((alert, i) => {
-        const shortMsg = alert.msg && alert.msg.length > 22
-          ? alert.msg.slice(0, 22) + "…"
-          : (alert.msg ?? "—");
-        const conf = alert.score != null ? alert.score.toFixed(2) : "—";
-        return (
-          <div key={`${alert.ts}-${i}`} className="flex gap-2" style={{ animation: "fadeSlide 0.15s ease-in" }}>
-            <span style={{ color: "rgba(0,212,255,0.3)" }}>[{alert.ts.slice(11, 19)}]</span>
-            <span style={{ color: "rgba(100,116,139,0.7)" }}>{alert.src_ip}:{alert.src_port} &gt; {alert.dst_ip}:{alert.dst_port}</span>
-            <span style={{ color: "#ff3b3b" }}>{shortMsg}</span>
-            <span style={{ color: "#10b981" }}>{alert.proto}</span>
-            {alert.score != null && (
-              <span style={{ color: "#f59e0b" }}>({conf})</span>
-            )}
-          </div>
-        );
-      })}
+      {display.length === 0 ? (
+        <div style={{ color: "rgba(100,116,139,0.4)" }}>Awaiting detection data...</div>
+      ) : (
+        display.map((alert, displayIdx) => {
+          const shortMsg = alert.msg && alert.msg.length > 22
+            ? alert.msg.slice(0, 22) + "…"
+            : (alert.msg ?? "—");
+          const conf = alert.score != null ? alert.score.toFixed(2) : "—";
+          return (
+            <motion.div
+              key={alerts.length - 8 + displayIdx}
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="flex gap-2"
+            >
+              <span style={{ color: "rgba(0,212,255,0.3)" }}>[{alert.ts.slice(11, 19)}]</span>
+              <span style={{ color: "rgba(100,116,139,0.7)" }}>{alert.src_ip}:{alert.src_port} &gt; {alert.dst_ip}:{alert.dst_port}</span>
+              <span style={{ color: "#ff3b3b" }}>{shortMsg}</span>
+              <span style={{ color: "#10b981" }}>{alert.proto}</span>
+              {alert.score != null && (
+                <span style={{ color: "#f59e0b" }}>({conf})</span>
+              )}
+            </motion.div>
+          );
+        })
+      )}
     </div>
   );
 }
@@ -165,7 +168,7 @@ export function ImpactSummary({ evaluation, replayPhase, pcapProgress, recentAle
             </div>
             <div className="text-right pt-1">
               <span className="text-xs font-mono font-semibold" style={{ color: "#10b981" }}>
-                −{liveFpGap.toLocaleString("en-US")} fewer false alarms ({((liveFpGap / 51343) * 100).toFixed(1)}% reduction)
+                −{liveFpGap.toLocaleString("en-US")} fewer false alarms ({((liveFpGap / liveCommFp) * 100).toFixed(1)}% reduction)
               </span>
             </div>
           </div>

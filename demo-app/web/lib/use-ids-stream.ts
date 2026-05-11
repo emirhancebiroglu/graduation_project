@@ -89,9 +89,9 @@ export function useIdsStream(): IdsStreamState {
           } else if (msg.type === "alert" && msg.engine === "xgboost") {
             const alert = msg.data as Alert;
             recentAlertsRef.current = [
-              alert,
               ...recentAlertsRef.current,
-            ].slice(0, MAX_RECENT_ALERTS);
+              alert,
+            ].slice(-MAX_RECENT_ALERTS);
             setRecentAlerts([...recentAlertsRef.current]);
           }
         } catch (e) {

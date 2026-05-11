@@ -267,6 +267,11 @@ async def _force_evaluation() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Pre-load ground truth CSV so first replay has no latency
+    logger.info("Pre-loading ground truth CSV (this takes ~30s)...")
+    _gt_loader.ensure_loaded()
+    logger.info("Ground truth loaded: %s", _gt_loader.stats())
+
     status_task = asyncio.create_task(_status_broadcaster())
     logger.info("Status broadcaster started")
 
