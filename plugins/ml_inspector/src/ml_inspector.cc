@@ -75,7 +75,7 @@ static const snort::Parameter ml_params[] =
       "max packets per flow before triggering inference" },
 
     { "model_path", snort::Parameter::PT_STRING, nullptr,
-      "/home/emirhan/bitirme/models/best_lstm_model.tflite",
+      "/home/emirhan/bitirme/models/fine_tuned_lstm_model_v5.tflite",
       "path to TFLite model file" },
 
     { nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr }
@@ -106,7 +106,7 @@ public:
 
     double      threshold   = 0.5;
     uint32_t    max_packets = 100;
-    std::string model_path  = "/home/emirhan/bitirme/models/best_lstm_model.tflite";
+    std::string model_path  = "/home/emirhan/bitirme/models/fine_tuned_lstm_model_v5.tflite";
 };
 
 // ---------------------------------------------------------------

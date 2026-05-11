@@ -6,6 +6,12 @@
 //   - MlFlowData/FI_* ile isim çakışması yok — aynı process'e yüklenebilir
 //   - swin/dwin clamp YOK (kasıtlı)
 //   - flow_closing flag kontrolü korundu
+//
+// FINAL CONFIG — Wednesday FPR Optimization (frozen 2026-05-10)
+// threshold   = 0.90, max_packets = 2
+// Filter rules: dst_port IN {53 (DNS), 137 (NetBIOS-NS), 389 (LDAP)} → suppressed
+// Calibrator:   none
+// Model:        fine_tuned_xgb_model.json
 
 #include <atomic>
 #include <cstdio>
@@ -202,7 +208,6 @@ public:
 
         fd->update(from_client, payload_len, tcp_win, pkt_ts);
 
-        // Flow kapanış kontrolü
         bool flow_closing = false;
         if (pkt->flow) {
             uint32_t flags = pkt->flow->ssn_state.session_flags;
@@ -210,38 +215,52 @@ public:
                                     SSNFLAG_RESET | SSNFLAG_TIMEDOUT | SSNFLAG_PRUNED);
         }
 
-        if (fd->get_total_packets() >= max_packets || flow_closing)
-            run_inference(pkt, fd);
+        uint32_t total = fd->get_total_packets();
+
+        if (fd->get_state() == XgbFlowData::WATCH) {
+            // Stage 2: fire at pkt 8 or on flow_closing, whichever comes first
+            if (total >= 8 || flow_closing)
+                run_stage2(pkt, fd);
+        } else {
+            // Stage 1: fire at max_packets or flow_closing
+            if (total >= max_packets || flow_closing)
+                run_stage1(pkt, fd);
+        }
     }
 
 private:
-    double       threshold;
-    uint32_t     max_packets;
+    double       threshold;           // stage-1 watch floor (0.90)
+    uint32_t     max_packets;         // stage-1 trigger packet count (2)
     std::string  model_path;
     XGBoostEngine engine;
 
-    // Score dağılımı istatistikleri
+    static const float STAGE1_HIGH_CONF;   // 0.95 — alert immediately
+    // threshold is the watch-zone floor    // 0.90 — enter WATCH
+    // stage-2 alert threshold == threshold (0.90)
+
     static std::atomic<uint64_t> cnt_total;
     static std::atomic<uint64_t> cnt_above;
 
-    void run_inference(snort::Packet* pkt, XgbFlowData* fd) {
-        double raw[XGB_FI_COUNT];
+    // Compute scaled feature vector into features_f[].
+    // Returns raw[] for logging.
+    bool compute_scaled(XgbFlowData* fd, float features_f[XGB_FI_COUNT],
+                        double raw[XGB_FI_COUNT]) {
         fd->compute_features(raw);
-
         double processed[XGB_FI_COUNT];
-        std::memcpy(processed, raw, sizeof(raw));
+        std::memcpy(processed, raw, XGB_FI_COUNT * sizeof(double));
         XgbFlowData::preprocess(processed, g_scaler_params);
-
-        float features_f[XGB_FI_COUNT];
         for (unsigned i = 0; i < XGB_FI_COUNT; i++)
             features_f[i] = static_cast<float>(processed[i]);
+        return true;
+    }
 
-        float score = 0.0f;
-        bool  ok    = false;
+    bool is_rule3_suppressed(snort::Packet* pkt) {
+        uint16_t dp = pkt->ptrs.dp;
+        return (dp == 53 || dp == 137 || dp == 389);
+    }
 
-        if (engine.is_ready())
-            ok = engine.run(features_f, score);
-
+    void emit_alert(snort::Packet* pkt, XgbFlowData* fd,
+                    float score, const char* stage, double raw[XGB_FI_COUNT]) {
         cnt_total++;
         if (score > static_cast<float>(threshold)) cnt_above++;
 
@@ -252,24 +271,66 @@ private:
         }
 
         snort::LogMessage(
-            "[xgb_inspector] pkts=%u score=%.4f engine=%s | "
+            "[xgb_inspector] %s pkts=%u score=%.4f | "
             "dur=%.4f sp=%.0f dp=%.0f sb=%.0f db=%.0f "
             "smsz=%.0f dmsz=%.0f sw=%.0f dw=%.0f si=%.4f di=%.4f\n",
-            fd->get_total_packets(), score, ok ? "xgboost" : "stub",
+            stage, fd->get_total_packets(), score,
             raw[XGB_FI_DUR],    raw[XGB_FI_SPKTS],   raw[XGB_FI_DPKTS],
             raw[XGB_FI_SBYTES], raw[XGB_FI_DBYTES],  raw[XGB_FI_SMEANSZ],
             raw[XGB_FI_DMEANSZ],raw[XGB_FI_SWIN],    raw[XGB_FI_DWIN],
             raw[XGB_FI_SINTPKT],raw[XGB_FI_DINTPKT]);
 
-        if (score > static_cast<float>(threshold))
+        if (score > static_cast<float>(threshold) && !is_rule3_suppressed(pkt))
             snort::DetectionEngine::queue_event(XGB_GID, XGB_SID_ANOMALY);
 
         fd->mark_inference_done();
+        fd->set_state(XgbFlowData::DONE);
+    }
+
+    void run_stage1(snort::Packet* pkt, XgbFlowData* fd) {
+        float  features_f[XGB_FI_COUNT];
+        double raw[XGB_FI_COUNT];
+        compute_scaled(fd, features_f, raw);
+
+        float score = 0.0f;
+        if (engine.is_ready())
+            engine.run(features_f, score);
+
+        fd->set_stage1_score(score);
+
+        if (score >= STAGE1_HIGH_CONF) {
+            // High-confidence attack — alert immediately
+            emit_alert(pkt, fd, score, "s1-high", raw);
+        } else if (score >= static_cast<float>(threshold)) {
+            // Watch zone — defer to stage 2
+            fd->set_state(XgbFlowData::WATCH);
+            snort::LogMessage(
+                "[xgb_inspector] s1-watch pkts=%u score=%.4f → deferring\n",
+                fd->get_total_packets(), score);
+        } else {
+            // Below threshold — benign, done
+            fd->mark_inference_done();
+            fd->set_state(XgbFlowData::DONE);
+        }
+    }
+
+    void run_stage2(snort::Packet* pkt, XgbFlowData* fd) {
+        float  features_f[XGB_FI_COUNT];
+        double raw[XGB_FI_COUNT];
+        compute_scaled(fd, features_f, raw);
+
+        float score = 0.0f;
+        if (engine.is_ready())
+            engine.run(features_f, score);
+
+        // Alert if still above threshold; otherwise suppress
+        emit_alert(pkt, fd, score, "s2-confirm", raw);
     }
 };
 
 std::atomic<uint64_t> XgbInspector::cnt_total{0};
 std::atomic<uint64_t> XgbInspector::cnt_above{0};
+const float XgbInspector::STAGE1_HIGH_CONF = 0.95f;
 
 // ---------------------------------------------------------------
 // Plugin API

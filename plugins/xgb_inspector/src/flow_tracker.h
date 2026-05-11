@@ -52,6 +52,8 @@ public:
 
     static unsigned inspector_id;
 
+    enum FlowState : uint8_t { IDLE, WATCH, DONE };
+
     void reset() {
         first_pkt_ts = 0.0;
         last_pkt_ts  = 0.0;
@@ -62,6 +64,8 @@ public:
         src_iat_sum = 0.0; dst_iat_sum = 0.0;
         total_packets = 0;
         inference_done = false;
+        flow_state = IDLE;
+        stage1_score = 0.0f;
     }
 
     void update(bool is_from_client, uint32_t payload_len,
@@ -117,6 +121,10 @@ public:
     uint32_t get_total_packets() const { return total_packets; }
     bool is_inference_done() const     { return inference_done; }
     void mark_inference_done()         { inference_done = true; }
+    FlowState get_state() const        { return flow_state; }
+    void set_state(FlowState s)        { flow_state = s; }
+    float get_stage1_score() const     { return stage1_score; }
+    void set_stage1_score(float s)     { stage1_score = s; }
 
 private:
     double   first_pkt_ts, last_pkt_ts;
@@ -125,8 +133,10 @@ private:
     int32_t  swin, dwin;
     double   last_src_ts, last_dst_ts;
     double   src_iat_sum, dst_iat_sum;
-    uint32_t total_packets;
-    bool     inference_done;
+    uint32_t  total_packets;
+    bool      inference_done;
+    FlowState flow_state;
+    float     stage1_score;
 };
 
 #endif // XGB_INSPECTOR_FLOW_TRACKER_H

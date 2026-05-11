@@ -14,11 +14,7 @@ OUTPUT_DIR="$HOME/bitirme/results/lstm"
 
 # ─── PCAP dosyaları ───
 PCAP_FILES=(
-    "Monday-WorkingHours.pcap"
-    "Tuesday-WorkingHours.pcap"
     "Wednesday-workingHours.pcap"
-    "Thursday-WorkingHours.pcap"
-    "Friday-WorkingHours.pcap"
 )
 
 echo "============================================="

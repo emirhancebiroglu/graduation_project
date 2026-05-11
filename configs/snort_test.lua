@@ -285,7 +285,7 @@ end
 -- =============================================
 ml_inspector =
 {
-    threshold   = 0.80,
+    threshold   = 0.50,
     max_packets = 2,
     model_path  = "/home/emirhan/bitirme/models/fine_tuned_lstm_model_v5.tflite",
 }

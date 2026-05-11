@@ -137,7 +137,7 @@ end
 -- =============================================
 xgb_inspector =
 {
-    threshold   = 0.50,
+    threshold   = 0.90,
     max_packets = 2,
     model_path  = "/home/emirhan/bitirme/models/fine_tuned_xgb_model.json",
 }

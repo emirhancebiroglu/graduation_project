@@ -21,3 +21,11 @@ Thumbs.db
 
 # Env files
 .env
+CLAUDE.md
+.claude/
+/docs
+/demo-app/api/.venv
+/demo-app/api/__pycache__/
+/demo-app/web/.next
+/demo-app/web/node_modules
+/demo-app/web/CLAUDE.md
