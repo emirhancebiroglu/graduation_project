@@ -7,12 +7,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { Alert } from "@/lib/types";
+import type { Alert, Engine } from "@/lib/types";
 
 type Filter = "all" | "xgboost" | "community";
 
 type Props = {
   alerts: Alert[];
+  engineAlerts: Record<Engine, Alert[]>;
   onClear: () => void;
 };
 
@@ -46,14 +47,19 @@ const FILTERS: { label: string; value: Filter }[] = [
   { label: "COMMUNITY", value: "community" },
 ];
 
-export function AlertFeed({ alerts, onClear }: Props) {
+export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState<Alert | null>(null);
   const [userScrolled, setUserScrolled] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const prevAlertCount = useRef(alerts.length);
 
-  const filtered = filter === "all" ? alerts : alerts.filter((a) => a.engine === filter);
+  // Use per-engine buffer for XGBOOST/COMMUNITY filters so community alerts are never
+  // squeezed out of the combined 1000-cap array by the high XGBoost volume.
+  const filtered =
+    filter === "all"
+      ? alerts
+      : engineAlerts[filter as Engine];
   const displayed = filtered.slice(0, 200);
 
   useEffect(() => {

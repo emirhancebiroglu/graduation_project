@@ -15,6 +15,7 @@ export default function Page() {
   const [activePcap, setActivePcap] = useState<"normal_2min" | "dos_hulk_2min" | "full_wednesday" | null>(null);
   const {
     alerts,
+    engineAlerts,
     connected,
     metrics,
     snortRunning,
@@ -142,7 +143,7 @@ export default function Page() {
 
         {/* Row 2: Traffic chart */}
         <TrafficChart
-          alerts={alerts}
+          metrics={metrics}
           snortRunning={effectiveRunning}
           replayStartedAt={replayStartedAt}
         />
@@ -161,7 +162,7 @@ export default function Page() {
               </div>
             </div>
             <div className="flex-1 flex flex-col min-h-0 p-3 pt-2">
-              <AlertFeed alerts={alerts} onClear={clearAlerts} />
+              <AlertFeed alerts={alerts} engineAlerts={engineAlerts} onClear={clearAlerts} />
             </div>
           </div>
 

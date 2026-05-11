@@ -13,7 +13,7 @@ from parsers import parse_alert_csv_line
 logger = logging.getLogger("alert-tailer")
 
 # Max queued alerts before we start dropping (logged at WARNING)
-_QUEUE_MAXSIZE = 10_000
+_QUEUE_MAXSIZE = 50_000
 
 
 class AlertTailer:

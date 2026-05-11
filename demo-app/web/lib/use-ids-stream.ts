@@ -12,6 +12,7 @@ export type EngineMetrics = {
 
 export type IdsStreamState = {
   alerts: Alert[];
+  engineAlerts: Record<Engine, Alert[]>;  // per-engine buffers (500 each), never squeezed out
   connected: boolean;
   snortRunning: boolean;
   pcapProgress: number;       // 0..1
@@ -31,8 +32,12 @@ const emptyMetrics = (): Record<Engine, EngineMetrics> => ({
   community: { total: 0, alertsPerSec: 0 },
 });
 
+const ENGINE_ALERTS_MAX = 500;
+const emptyEngineAlerts = (): Record<Engine, Alert[]> => ({ xgboost: [], community: [] });
+
 export function useIdsStream(): IdsStreamState {
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [engineAlerts, setEngineAlerts] = useState<Record<Engine, Alert[]>>(emptyEngineAlerts);
   const [snortRunning, setSnortRunning] = useState(false);
   const [pcapProgress, setPcapProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -63,8 +68,14 @@ export function useIdsStream(): IdsStreamState {
       const now = Date.now();
       const engine = msg.data.engine;
 
-      // Update alert list
+      // Update combined alert list (capped at 1000 for ALL view)
       setAlerts((prev) => [msg.data, ...prev].slice(0, 1000));
+
+      // Update per-engine buffer (capped at 500 each — never squeezed out by other engine)
+      setEngineAlerts((prev) => ({
+        ...prev,
+        [engine]: [msg.data, ...prev[engine]].slice(0, ENGINE_ALERTS_MAX),
+      }));
 
       // Track first alert per engine (xgboost also feeds the latency card)
       if (engine === "xgboost") {
@@ -100,6 +111,7 @@ export function useIdsStream(): IdsStreamState {
         setFirstAlertAt(null);
         setFirstAlertAtByEngine({ xgboost: null, community: null });
         setAlerts([]);
+        setEngineAlerts(emptyEngineAlerts());
         setFileCounts({ xgboost_file_count: 0, community_file_count: 0 });
         tsBuffers.current = { xgboost: [], community: [] };
         totalCounts.current = { xgboost: 0, community: 0 };
@@ -113,6 +125,7 @@ export function useIdsStream(): IdsStreamState {
 
   return {
     alerts,
+    engineAlerts,
     connected: readyState === ReadyState.OPEN,
     snortRunning,
     pcapProgress,
@@ -122,6 +135,6 @@ export function useIdsStream(): IdsStreamState {
     firstAlertAtByEngine,
     metrics,
     fileCounts,
-    clearAlerts: () => setAlerts([]),
+    clearAlerts: () => { setAlerts([]); setEngineAlerts(emptyEngineAlerts()); },
   };
 }

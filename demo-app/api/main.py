@@ -240,6 +240,12 @@ async def replay_start(body: ReplayRequest) -> ReplayStartResponse:
         raise HTTPException(status_code=400, detail=f"PCAP not found: {pcap_path}")
 
     async def _on_launched(run_dir: str) -> None:
+        # Reset per-run state so previous replay counts don't bleed into this run
+        global _history
+        _history = []
+        for eng in _counters:
+            _counters[eng] = {"total": 0, "unique_src": set(), "flows": 0}
+
         # Broadcast running status AND start tailers immediately at launch time,
         # not after the 2s early-exit check. This ensures alerts written during
         # fast PCAP replay are captured even if Snort exits before start() returns.

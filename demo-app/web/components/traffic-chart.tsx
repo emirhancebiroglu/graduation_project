@@ -10,20 +10,24 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import type { Alert } from "@/lib/types";
+import type { EngineMetrics } from "@/lib/use-ids-stream";
 
 const WINDOW_S = 60;
 const TICK_MS = 250;
 const TICK_COLOR = "#334155";
 
 type Bucket = { t: number; xgboost: number; community: number };
-type Props = { alerts: Alert[]; snortRunning: boolean; replayStartedAt: number | null };
+type Props = {
+  metrics: Record<"xgboost" | "community", EngineMetrics>;
+  snortRunning: boolean;
+  replayStartedAt: number | null;
+};
 
 function buildEmptyBuckets(): Bucket[] {
   return Array.from({ length: WINDOW_S }, (_, i) => ({ t: i - WINDOW_S + 1, xgboost: 0, community: 0 }));
 }
 
-export function TrafficChart({ alerts, snortRunning, replayStartedAt }: Props) {
+export function TrafficChart({ metrics, snortRunning, replayStartedAt }: Props) {
   const [mounted, setMounted] = useState(false);
   const [buckets, setBuckets] = useState<Bucket[]>(buildEmptyBuckets);
   const [replayEnded, setReplayEnded] = useState(false);
@@ -35,8 +39,9 @@ export function TrafficChart({ alerts, snortRunning, replayStartedAt }: Props) {
   const replayEndedRef = useRef(false);
   const pending = useRef<Map<number, { xgboost: number; community: number }>>(new Map());
   const prevRunning = useRef(false);
-  const prevLength = useRef(0);
   const replayStartSec = useRef<number | null>(null);
+  // Track previous totals to compute per-tick deltas
+  const prevTotals = useRef<Record<"xgboost" | "community", number>>({ xgboost: 0, community: 0 });
 
   useEffect(() => {
     if (snortRunning && !prevRunning.current) {
@@ -49,7 +54,7 @@ export function TrafficChart({ alerts, snortRunning, replayStartedAt }: Props) {
       setReplayEnded(false);
       setHasEverReplayed(true);
       pending.current = new Map();
-      prevLength.current = 0;
+      prevTotals.current = { xgboost: 0, community: 0 };
     }
     if (!snortRunning && prevRunning.current) {
       replayStartSec.current = null;
@@ -59,22 +64,18 @@ export function TrafficChart({ alerts, snortRunning, replayStartedAt }: Props) {
     prevRunning.current = snortRunning;
   }, [snortRunning, replayStartedAt]);
 
-  if (alerts.length !== prevLength.current) {
-    if (alerts.length < prevLength.current) {
-      pending.current = new Map();
-      prevLength.current = alerts.length;
-    } else {
-      const added = alerts.length - prevLength.current;
-      const newAlerts = alerts.slice(0, added);
-      prevLength.current = alerts.length;
-      const nowSec = Math.floor(Date.now() / 1000);
-      for (const a of newAlerts) {
-        if (!pending.current.has(nowSec)) pending.current.set(nowSec, { xgboost: 0, community: 0 });
-        const bucket = pending.current.get(nowSec)!;
-        if (a.engine === "xgboost") bucket.xgboost += 1;
-        else if (a.engine === "community") bucket.community += 1;
-      }
-    }
+  // Accumulate metric deltas into pending buckets (runs on every metrics update)
+  const xgbTotal = metrics?.xgboost?.total ?? 0;
+  const commTotal = metrics?.community?.total ?? 0;
+  if (xgbTotal !== prevTotals.current.xgboost || commTotal !== prevTotals.current.community) {
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (!pending.current.has(nowSec)) pending.current.set(nowSec, { xgboost: 0, community: 0 });
+    const bucket = pending.current.get(nowSec)!;
+    const xgbDelta = Math.max(0, xgbTotal - prevTotals.current.xgboost);
+    const commDelta = Math.max(0, commTotal - prevTotals.current.community);
+    bucket.xgboost += xgbDelta;
+    bucket.community += commDelta;
+    prevTotals.current = { xgboost: xgbTotal, community: commTotal };
   }
 
   useEffect(() => {
