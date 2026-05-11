@@ -39,6 +39,7 @@ class Alert(BaseModel):
     sid: int
     msg: str
     score: float | None = None       # xgboost only, 0..1
+    ground_truth: str | None = None   # "attack" | "benign" | None
 
 
 # ── Metrics ──────────────────────────────────────────────────────────────────
@@ -105,8 +106,31 @@ class WsAlertCountsMessage(BaseModel):
     data: AlertCountsPayload
 
 
+class EngineEvaluation(BaseModel):
+    TP: int
+    TN: int
+    FP: int
+    FN: int
+    accuracy: float
+    precision: float
+    recall: float
+    f1: float
+    fpr: float
+
+
+class EvaluationPayload(BaseModel):
+    xgboost: EngineEvaluation
+    community: EngineEvaluation
+    total_flows: int
+
+
+class WsEvaluationMessage(BaseModel):
+    type: Literal["evaluation"] = "evaluation"
+    data: EvaluationPayload
+
+
 WsMessage = Annotated[
-    Union[WsAlertMessage, WsMetricMessage, WsStatusMessage, WsComparisonMessage, WsAlertCountsMessage],
+    Union[WsAlertMessage, WsMetricMessage, WsStatusMessage, WsComparisonMessage, WsAlertCountsMessage, WsEvaluationMessage],
     Field(discriminator="type"),
 ]
 

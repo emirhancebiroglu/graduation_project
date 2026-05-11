@@ -13,6 +13,7 @@ export type Alert = {
   sid: number;
   msg: string;
   score?: number;
+  ground_truth?: string | null;
 };
 
 export type Metrics = {
@@ -33,9 +34,28 @@ export type AlertCounts = {
   community_file_count: number;
 };
 
+export type EngineEvaluation = {
+  TP: number;
+  TN: number;
+  FP: number;
+  FN: number;
+  accuracy: number;
+  precision: number;
+  recall: number;
+  f1: number;
+  fpr: number;
+};
+
+export type EvaluationResult = {
+  xgboost: EngineEvaluation;
+  community: EngineEvaluation;
+  total_flows: number;
+};
+
 export type WsMessage =
   | { type: "alert"; engine: Engine; data: Alert }
   | { type: "metric"; engine: Engine; data: Metrics }
   | { type: "status"; data: { snort_running: boolean; pcap_progress: number; error?: string | null } }
   | { type: "comparison"; data: ComparisonSnapshot }
-  | { type: "alert_counts"; data: AlertCounts };
+  | { type: "alert_counts"; data: AlertCounts }
+  | { type: "evaluation"; data: EvaluationResult };

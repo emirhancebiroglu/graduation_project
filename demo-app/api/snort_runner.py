@@ -73,25 +73,7 @@ def _xgboost_env() -> dict[str, str]:
 
 
 def _get_pcap_duration(pcap_path: str, pcap_name: str) -> float:
-    fallback = _PCAP_DURATION_FALLBACK.get(pcap_name, 120.0)
-    try:
-        result = subprocess.run(
-            ["capinfos", "-c", "-u", pcap_path],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        for line in result.stdout.splitlines():
-            if "Capture duration" in line:
-                # "Capture duration:    119.996614 seconds"
-                parts = line.split(":")
-                if len(parts) >= 2:
-                    duration = float(parts[1].strip().split()[0])
-                    logger.info("capinfos duration for %s: %.1fs", pcap_name, duration)
-                    return duration
-    except Exception as exc:
-        logger.warning("capinfos failed (%s), using fallback %.0fs: %s", pcap_name, fallback, exc)
-    return fallback
+    return _PCAP_DURATION_FALLBACK.get(pcap_name, 120.0)
 
 
 # ── SnortRunner ───────────────────────────────────────────────────────────────
@@ -123,6 +105,7 @@ class SnortRunner:
         self,
         pcap_name: str,
         pcap_path: str,
+        run_id: str,
         on_launched: "Coroutine[Any, Any, None] | None" = None,
         on_launched_with_dir: "Callable[[str], Coroutine[Any, Any, None]] | None" = None,
     ) -> RunState:
@@ -131,7 +114,6 @@ class SnortRunner:
 
         duration = await asyncio.to_thread(_get_pcap_duration, pcap_path, pcap_name)
 
-        run_id = str(uuid.uuid4())
         run_dir = _RUN_ROOT / run_id
         xgb_dir = run_dir / "xgboost"
         comm_dir = run_dir / "community"

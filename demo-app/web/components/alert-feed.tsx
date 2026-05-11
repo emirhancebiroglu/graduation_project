@@ -41,6 +41,25 @@ function scoreBand(alert: Alert): string {
   return "High (score 0.90–0.95)";
 }
 
+function gtBadge(gt: string | null | undefined): React.ReactNode {
+  if (!gt) return null;
+  if (gt === "attack") {
+    return (
+      <span className="text-[8px] font-mono px-1 py-0.5 font-bold" style={{ border: "1px solid rgba(16,185,129,0.4)", background: "rgba(16,185,129,0.12)", color: "#10b981", letterSpacing: "0.05em" }}>
+        REAL ATTACK
+      </span>
+    );
+  }
+  if (gt === "benign") {
+    return (
+      <span className="text-[8px] font-mono px-1 py-0.5 font-bold" style={{ border: "1px solid rgba(255,59,59,0.35)", background: "rgba(255,59,59,0.1)", color: "#ff3b3b", letterSpacing: "0.05em" }}>
+        FALSE ALARM
+      </span>
+    );
+  }
+  return null;
+}
+
 const FILTERS: { label: string; value: Filter }[] = [
   { label: "ALL", value: "all" },
   { label: "XGBOOST", value: "xgboost" },
@@ -124,7 +143,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-auto min-h-0">
         {/* Header row */}
         <div className="grid sticky top-0 gap-2 px-2 py-1.5 text-[9px] font-mono border-b" style={{
-          gridTemplateColumns: "80px 80px 1fr 1fr 50px 60px 1fr",
+          gridTemplateColumns: "80px 80px 72px 1fr 1fr 50px 60px 1fr",
           background: "#0f1318",
           borderColor: "rgba(0,212,255,0.08)",
           color: "rgba(0,212,255,0.35)",
@@ -132,6 +151,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
         }}>
           <span>TIME</span>
           <span>ENGINE</span>
+          <span>GT</span>
           <span>SOURCE</span>
           <span>DESTINATION</span>
           <span>PROTO</span>
@@ -149,7 +169,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
                 onClick={() => setSelected(a)}
                 className="ids-row grid gap-2 px-2 py-2 cursor-pointer transition-all"
                 style={{
-                  gridTemplateColumns: "80px 80px 1fr 1fr 50px 60px 1fr",
+                  gridTemplateColumns: "80px 80px 72px 1fr 1fr 50px 60px 1fr",
                   borderLeft: `2px solid ${color}22`,
                   background: "transparent",
                 }}
@@ -161,6 +181,9 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
                   <span className="text-[9px] font-mono px-1.5 py-0.5" style={scoreBadgeStyle(a)}>
                     {a.engine === "xgboost" ? "XGB" : "COM"}
                   </span>
+                </span>
+                <span className="flex items-center">
+                  {gtBadge(a.ground_truth)}
                 </span>
                 <span className="text-[10px] font-mono truncate" style={{ color }}>
                   {a.src_ip}:{a.src_port}
@@ -208,6 +231,9 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
                 <Row label="MESSAGE" value={selected.msg} />
                 {selected.score != null && <Row label="SCORE" value={selected.score.toFixed(6)} />}
                 <Row label="BAND" value={scoreBand(selected)} />
+                {selected.ground_truth && (
+                  <Row label="GROUND TRUTH" value={selected.ground_truth === "attack" ? "REAL ATTACK" : "FALSE ALARM"} />
+                )}
               </div>
               <details>
                 <summary className="text-[10px] font-mono cursor-pointer select-none" style={{ color: "rgba(0,212,255,0.4)" }}>

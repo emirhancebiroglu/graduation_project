@@ -1,140 +1,115 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import useWebSocket, { ReadyState } from "react-use-websocket";
-import type { WsMessage, Alert, Engine, AlertCounts } from "./types";
+import { useEffect, useRef, useState, useCallback } from "react";
+import type { WsMessage, AlertCounts, EvaluationResult } from "./types";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000/ws";
 
-export type EngineMetrics = {
-  total: number;
-  alertsPerSec: number;       // 10-second rolling window
-};
+export type ReplayPhase = "idle" | "running" | "evaluating" | "complete";
 
 export type IdsStreamState = {
-  alerts: Alert[];
-  engineAlerts: Record<Engine, Alert[]>;  // per-engine buffers (500 each), never squeezed out
   connected: boolean;
   snortRunning: boolean;
-  pcapProgress: number;       // 0..1
+  pcapProgress: number;
   error: string | null;
-  replayStartedAt: number | null;       // Date.now() when snortRunning flipped true
-  firstAlertAt: number | null;          // Date.now() of first xgboost alert this run
-  firstAlertAtByEngine: Record<Engine, number | null>;  // per-engine first alert
-  metrics: Record<Engine, EngineMetrics>;
-  fileCounts: AlertCounts;              // file-based line counts from backend
-  clearAlerts: () => void;
+  pcapProgressVisible: boolean;
+  replayPhase: ReplayPhase;
+  evaluation: EvaluationResult | null;
 };
 
-const WINDOW_MS = 10_000;
-
-const emptyMetrics = (): Record<Engine, EngineMetrics> => ({
-  xgboost: { total: 0, alertsPerSec: 0 },
-  community: { total: 0, alertsPerSec: 0 },
-});
-
-const ENGINE_ALERTS_MAX = 500;
-const emptyEngineAlerts = (): Record<Engine, Alert[]> => ({ xgboost: [], community: [] });
-
 export function useIdsStream(): IdsStreamState {
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [engineAlerts, setEngineAlerts] = useState<Record<Engine, Alert[]>>(emptyEngineAlerts);
+  const [connected, setConnected] = useState(false);
   const [snortRunning, setSnortRunning] = useState(false);
   const [pcapProgress, setPcapProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [replayStartedAt, setReplayStartedAt] = useState<number | null>(null);
-  const [firstAlertAt, setFirstAlertAt] = useState<number | null>(null);
-  const [firstAlertAtByEngine, setFirstAlertAtByEngine] = useState<Record<Engine, number | null>>({ xgboost: null, community: null });
-  const [metrics, setMetrics] = useState<Record<Engine, EngineMetrics>>(emptyMetrics);
-  const [fileCounts, setFileCounts] = useState<AlertCounts>({ xgboost_file_count: 0, community_file_count: 0 });
+  const [replayPhase, setReplayPhase] = useState<ReplayPhase>("idle");
+  const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
+  const [pcapProgressVisible, setPcapProgressVisible] = useState(false);
 
-  // Rolling timestamp buffers for alerts/sec calculation
-  const tsBuffers = useRef<Record<Engine, number[]>>({
-    xgboost: [],
-    community: [],
-  });
-  const totalCounts = useRef<Record<Engine, number>>({ xgboost: 0, community: 0 });
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevRunning = useRef(false);
 
-  const { lastJsonMessage, readyState } = useWebSocket<WsMessage | null>(
-    WS_URL,
-    { shouldReconnect: () => true, reconnectInterval: 1500 }
-  );
+  const handleStatus = useCallback((running: boolean, progress: number, err: string | null | undefined) => {
+    setSnortRunning(running);
+    setPcapProgress(progress);
+    setError(err ?? null);
+
+    if (running && !prevRunning.current) {
+      setReplayPhase("running");
+      setPcapProgressVisible(true);
+      setEvaluation(null);
+    } else if (!running && prevRunning.current) {
+      setPcapProgressVisible(false);
+    }
+    prevRunning.current = running;
+  }, []);
+
+  const handleEvaluation = useCallback((data: EvaluationResult) => {
+    setEvaluation(data);
+    setReplayPhase("complete");
+    setSnortRunning(false);
+    setPcapProgressVisible(false);
+  }, []);
+
+  const connect = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+
+    try {
+      const ws = new WebSocket(WS_URL);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setConnected(true);
+        if (reconnectTimer.current) {
+          clearTimeout(reconnectTimer.current);
+          reconnectTimer.current = null;
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data as string) as WsMessage;
+
+          if (msg.type === "status") {
+            handleStatus(
+              msg.data.snort_running,
+              msg.data.pcap_progress ?? 0,
+              msg.data.error
+            );
+          } else if (msg.type === "evaluation") {
+            handleEvaluation(msg.data);
+          }
+        } catch (e) {
+          console.error("Failed to parse WS message:", e);
+        }
+      };
+
+      ws.onerror = () => {};
+      ws.onclose = () => {
+        setConnected(false);
+        wsRef.current = null;
+        reconnectTimer.current = setTimeout(() => connect(), 1500);
+      };
+    } catch (e) {
+      reconnectTimer.current = setTimeout(() => connect(), 1500);
+    }
+  }, [handleStatus, handleEvaluation]);
 
   useEffect(() => {
-    if (!lastJsonMessage) return;
-    const msg = lastJsonMessage as WsMessage;
-
-    if (msg.type === "alert") {
-      const now = Date.now();
-      const engine = msg.data.engine;
-
-      // Update combined alert list (capped at 1000 for ALL view)
-      setAlerts((prev) => [msg.data, ...prev].slice(0, 1000));
-
-      // Update per-engine buffer (capped at 500 each — never squeezed out by other engine)
-      setEngineAlerts((prev) => ({
-        ...prev,
-        [engine]: [msg.data, ...prev[engine]].slice(0, ENGINE_ALERTS_MAX),
-      }));
-
-      // Track first alert per engine (xgboost also feeds the latency card)
-      if (engine === "xgboost") {
-        setFirstAlertAt((prev) => prev ?? now);
-      }
-      setFirstAlertAtByEngine((prev) => prev[engine] !== null ? prev : { ...prev, [engine]: now });
-
-      // Rolling window for alerts/sec
-      const buf = tsBuffers.current[engine];
-      buf.push(now);
-      totalCounts.current[engine] += 1;
-
-      // Prune entries older than 10s
-      const cutoff = now - WINDOW_MS;
-      while (buf.length > 0 && buf[0] < cutoff) buf.shift();
-
-      const aps = buf.length / (WINDOW_MS / 1000);
-      const total = totalCounts.current[engine];
-      setMetrics((prev) => ({
-        ...prev,
-        [engine]: { total, alertsPerSec: aps },
-      }));
-
-    } else if (msg.type === "status") {
-      const running = msg.data.snort_running;
-      setPcapProgress(msg.data.pcap_progress ?? 0);
-      setError(msg.data.error ?? null);
-      setSnortRunning(running);
-
-      // Reset per-run state when a new replay starts
-      if (running && !prevRunning.current) {
-        setReplayStartedAt(Date.now());
-        setFirstAlertAt(null);
-        setFirstAlertAtByEngine({ xgboost: null, community: null });
-        setAlerts([]);
-        setEngineAlerts(emptyEngineAlerts());
-        setFileCounts({ xgboost_file_count: 0, community_file_count: 0 });
-        tsBuffers.current = { xgboost: [], community: [] };
-        totalCounts.current = { xgboost: 0, community: 0 };
-        setMetrics(emptyMetrics());
-      }
-      prevRunning.current = running;
-    } else if (msg.type === "alert_counts") {
-      setFileCounts(msg.data);
-    }
-  }, [lastJsonMessage]);
+    connect();
+    return () => {
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      wsRef.current?.close();
+    };
+  }, [connect]);
 
   return {
-    alerts,
-    engineAlerts,
-    connected: readyState === ReadyState.OPEN,
+    connected,
     snortRunning,
     pcapProgress,
     error,
-    replayStartedAt,
-    firstAlertAt,
-    firstAlertAtByEngine,
-    metrics,
-    fileCounts,
-    clearAlerts: () => { setAlerts([]); setEngineAlerts(emptyEngineAlerts()); },
+    pcapProgressVisible,
+    replayPhase,
+    evaluation,
   };
 }

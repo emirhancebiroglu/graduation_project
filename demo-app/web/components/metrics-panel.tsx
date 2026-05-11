@@ -3,7 +3,7 @@ import type { IdsStreamState } from "@/lib/use-ids-stream";
 
 type Props = Pick<
   IdsStreamState,
-  "metrics" | "snortRunning" | "pcapProgress" | "replayStartedAt" | "firstAlertAt"
+  "metrics" | "snortRunning" | "pcapProgress" | "replayStartedAt" | "firstAlertAt" | "evaluation"
 >;
 
 function fmt(n: number): string {
@@ -79,6 +79,7 @@ export function MetricsPanel({
   pcapProgress,
   replayStartedAt,
   firstAlertAt,
+  evaluation,
 }: Props) {
   const xgb = metrics.xgboost;
   const comm = metrics.community;
@@ -88,14 +89,14 @@ export function MetricsPanel({
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 h-full">
       <StatCard
         label="XGBOOST ALERTS"
-        sublabel="ML ENGINE"
+        sublabel={evaluation ? `TP ${evaluation.xgboost.TP.toLocaleString()} · FP ${evaluation.xgboost.FP.toLocaleString()}` : "ML ENGINE"}
         value={fmt(xgb.total)}
         subvalue={`${fmtAps(xgb.alertsPerSec)} · 10s avg`}
         color="red"
       />
       <StatCard
         label="COMMUNITY ALERTS"
-        sublabel="SNORT3 RULES"
+        sublabel={evaluation ? `TP ${evaluation.community.TP.toLocaleString()} · FP ${evaluation.community.FP.toLocaleString()}` : "SNORT3 RULES"}
         value={fmt(comm.total)}
         subvalue={`${fmtAps(comm.alertsPerSec)} · 10s avg`}
         color="cyan"
