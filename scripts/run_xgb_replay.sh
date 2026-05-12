@@ -18,7 +18,7 @@ export LD_LIBRARY_PATH="${XGBOOST_LIB}:${LD_LIBRARY_PATH}"
 
 # ─── PCAP dosyaları ───
 PCAP_FILES=(
-    "Wednesday-workingHours.pcap"
+    "Friday-WorkingHours.pcap"
 )
 
 echo "============================================="
