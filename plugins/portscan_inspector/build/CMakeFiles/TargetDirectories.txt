@@ -1,0 +1,3 @@
+/home/emirhan/bitirme/plugins/portscan_inspector/build/CMakeFiles/portscan_inspector.dir
+/home/emirhan/bitirme/plugins/portscan_inspector/build/CMakeFiles/edit_cache.dir
+/home/emirhan/bitirme/plugins/portscan_inspector/build/CMakeFiles/rebuild_cache.dir

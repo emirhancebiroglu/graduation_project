@@ -1,0 +1,2 @@
+alert tcp any any -> any any ( msg:"PortScan XGBoost Anomaly"; gid:302; sid:1; rev:1; )
+alert udp any any -> any any ( msg:"PortScan XGBoost Anomaly"; gid:302; sid:2; rev:1; )

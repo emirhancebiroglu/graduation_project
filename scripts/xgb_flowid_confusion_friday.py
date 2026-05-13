@@ -28,16 +28,6 @@ import logging
 from pathlib import Path
 from sklearn.metrics import confusion_matrix
 
-class NumpyEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, (np.bool_, np.integer)):
-            return int(obj)
-        if isinstance(obj, np.floating):
-            return float(obj)
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return super().default(obj)
-
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
@@ -316,11 +306,11 @@ ALL TARGETS: {'✓ HIT — OPTIMIZATION COMPLETE' if hit else '✗ NOT YET'}
         out_json = Path(args.json_output).expanduser()
         out_json.parent.mkdir(parents=True, exist_ok=True)
         with open(out_json, 'w') as f:
-            json.dump(m, f, indent=2, cls=NumpyEncoder)
+            json.dump(m, f, indent=2)
         # Append to history
         history_path = out_json.parent / 'history.jsonl'
         with open(history_path, 'a') as f:
-            f.write(json.dumps(m, cls=NumpyEncoder) + '\n')
+            f.write(json.dumps(m) + '\n')
         logging.info(f"JSON saved: {out_json}")
 
     # Exit code: 0 = targets hit, 1 = not yet

@@ -45,37 +45,33 @@ fi
 
 mkdir -p "$ALERT_DIR"
 # Clear previous alerts
-rm -f "$ALERT_DIR/alerts.txt" "$ALERT_DIR/alert_fast.txt" "$ALERT_DIR/alert_csv.txt"
+rm -f "$ALERT_DIR/alert_csv.txt"
 
 echo "Starting Snort replay..."
 START_TIME=$(date +%s)
 
-cd "$SNORT_ETC"
-$SNORT_BIN \
+cd "$SNORT_ETC" && $SNORT_BIN \
     -c "$CONFIG" \
     --plugin-path "$PLUGIN_PATH" \
     -r "$PCAP_PATH" \
     -A alert_csv \
     -l "$ALERT_DIR" \
     --warn-all \
-    > "$ALERT_DIR/snort_output.log" 2>&1
+    -q \
+    2>/dev/null
 
 END_TIME=$(date +%s)
 ELAPSED=$((END_TIME - START_TIME))
 
-SNORT_LOG="$ALERT_DIR/snort_output.log"
-if [ -f "$SNORT_LOG" ]; then
-    # Count portscan detection messages - look for detection pattern in log
-    ALERT_COUNT=$(grep -cE "portscan_inspector.*score" "$SNORT_LOG" 2>/dev/null || echo "0")
-    if [ "$ALERT_COUNT" = "0" ] || [ -z "$ALERT_COUNT" ]; then
-        ALERT_COUNT=0
-    fi
-    echo "Done: $ALERT_COUNT portscan detections in ${ELAPSED}s"
+ALERT_FILE="$ALERT_DIR/alert_csv.txt"
+if [ -f "$ALERT_FILE" ]; then
+    ALERT_COUNT=$(wc -l < "$ALERT_FILE")
+    echo "Done: $ALERT_COUNT alerts in ${ELAPSED}s"
 else
     echo "Done: 0 alerts in ${ELAPSED}s"
     ALERT_COUNT=0
 fi
 
 echo ""
-echo "Log file: $SNORT_LOG"
+echo "Alert file: $ALERT_FILE"
 echo "Alert count: $ALERT_COUNT"

@@ -124,3 +124,12 @@ xgb_inspector =
     max_packets = 2,
     model_path  = "/home/emirhan/bitirme/models/fine_tuned_xgb_model.json",
 }
+
+-- ─── PortScan Inspector (TCP SYN cross-flow) ──────────────
+portscan_inspector =
+{
+    threshold   = 0.70,
+    model_path  = "/home/emirhan/bitirme/models/portscan_aggregator_model.json",
+    window_sec  = 60,
+    min_syns    = 3,
+}
