@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -O3 -DNDEBUG -shared  -o bot_client_inspector.so CMakeFiles/bot_client_inspector.dir/src/bot_client_inspector.cc.o   -L/home/emirhan/snort_src/xgboost/lib  -Wl,-rpath,/home/emirhan/snort_src/xgboost/lib -lxgboost 

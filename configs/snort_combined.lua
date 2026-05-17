@@ -117,19 +117,46 @@ ml_inspector =
     model_path  = "/home/emirhan/bitirme/models/fine_tuned_lstm_model.tflite",
 }
 
--- ─── XGBoost Inspector ────────────────────────────────────────
-xgb_inspector =
+-- ─── DoS Inspector (per-flow XGBoost, GID:301) ──────────────
+dos_inspector =
 {
-    threshold   = 0.50,
+    threshold   = 0.90,
     max_packets = 2,
-    model_path  = "/home/emirhan/bitirme/models/fine_tuned_xgb_model.json",
+    model_path  = "/home/emirhan/bitirme/models/dos_model.json",
 }
 
 -- ─── PortScan Inspector (TCP SYN cross-flow) ──────────────
 portscan_inspector =
 {
-    threshold   = 0.70,
+    threshold   = 0.50,
     model_path  = "/home/emirhan/bitirme/models/portscan_aggregator_model.json",
     window_sec  = 60,
     min_syns    = 3,
+}
+
+-- ─── DoS Aggregator (Cross-flow SYN rate) ────────────────
+dos_aggregator =
+{
+    threshold    = 0.30,
+    model_path   = "/home/emirhan/bitirme/models/dos_aggregator_model.json",
+    window_sec   = 60,
+    min_syns     = 3,
+}
+
+-- ─── Botnet C2 Inspector (Cross-flow SYN per dst IP) ──
+botnet_c2_inspector =
+{
+    threshold    = 0.50,
+    model_path   = "/home/emirhan/bitirme/models/botnet_c2_model.json",
+    window_sec   = 120,
+    min_syns     = 3,
+}
+
+-- ─── Bot Client Inspector (Per-src-IP outgoing SYN) ──
+bot_client_inspector =
+{
+    threshold    = 0.95,
+    model_path   = "/home/emirhan/bitirme/models/bot_client_model.json",
+    window_sec   = 300,
+    min_syns     = 3,
 }

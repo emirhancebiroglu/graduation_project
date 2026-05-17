@@ -127,8 +127,20 @@ end
 -- =============================================
 portscan_inspector =
 {
-    threshold   = 0.70,
-    model_path  = "/home/emirhan/bitirme/models/portscan_aggregator_model.json",
-    window_sec  = 60,
-    min_syns    = 3,
+    threshold    = 0.50,
+    model_path   = "/home/emirhan/bitirme/models/portscan_aggregator_model.json",
+    window_sec   = 60,
+    min_packets  = 3,
+}
+
+-- Snort built-in portscan inspector (distributed scans, UDP sweeps, ICMP)
+port_scan =
+{
+    protos    = { 'tcp', 'udp', 'icmp', 'ip' },
+    scan_types = { 'portscan', 'portsweep', 'decoy_portscan', 'distributed_portscan' },
+    memcap    = 10485760,
+    tcp_window = 60,
+    udp_window = 60,
+    tcp_ports = { scans = 50, ports = 15 },
+    udp_ports = { scans = 50, ports = 15 },
 }

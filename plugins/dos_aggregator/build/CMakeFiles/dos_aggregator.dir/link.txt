@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -O3 -DNDEBUG -shared  -o dos_aggregator.so CMakeFiles/dos_aggregator.dir/src/dos_inspector.cc.o   -L/home/emirhan/snort_src/xgboost/lib  -Wl,-rpath,/home/emirhan/snort_src/xgboost/lib -lxgboost 

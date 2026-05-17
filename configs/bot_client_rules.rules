@@ -1,0 +1,1 @@
+alert tcp (gid:306; sid:1)

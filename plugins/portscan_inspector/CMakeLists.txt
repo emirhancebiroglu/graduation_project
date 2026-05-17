@@ -21,8 +21,10 @@ add_library(portscan_inspector MODULE
 target_include_directories(portscan_inspector PRIVATE
     ${SNORT3_INCLUDE_DIRS}
     ${XGBOOST_ROOT}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include/src
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
 
 target_link_directories(portscan_inspector PRIVATE

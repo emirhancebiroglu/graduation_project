@@ -4,7 +4,7 @@
 # compile CXX with /usr/bin/c++
 CXX_DEFINES = -Dportscan_inspector_EXPORTS
 
-CXX_INCLUDES = -I/usr/local/include/snort -I/home/emirhan/snort_src/xgboost/include -I/home/emirhan/bitirme/plugins/portscan_inspector/src -I/home/emirhan/bitirme/plugins/portscan_inspector
+CXX_INCLUDES = -I/usr/local/include/snort -I/home/emirhan/snort_src/xgboost/include -I/home/emirhan/bitirme/plugins/portscan_inspector -I/home/emirhan/bitirme/plugins/portscan_inspector/../include/src -I/home/emirhan/bitirme/plugins/portscan_inspector/../include
 
 CXX_FLAGS = -O3 -DNDEBUG -std=gnu++17 -fPIC -fvisibility=default
 

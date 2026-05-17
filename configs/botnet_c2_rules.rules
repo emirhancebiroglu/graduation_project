@@ -1,0 +1,1 @@
+alert tcp any any -> any any ( msg:"Botnet C2 XGBoost Anomaly"; gid:305; sid:1; rev:1; )

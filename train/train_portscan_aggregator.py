@@ -133,6 +133,14 @@ def main():
         json.dump(scaler_params, f, indent=2)
     logging.info(f"Scaler params saved: {params_path}")
 
+    # JSON sidecar for auto-loading (matching plugin naming convention)
+    sidecar_path = output_model.with_name(output_model.stem + '_scaler.json')
+    sidecar = {'median': [round(v, 10) for v in scaler.center_.tolist()],
+               'iqr': [round(v, 10) for v in scaler.scale_.tolist()]}
+    with open(sidecar_path, 'w') as f:
+        json.dump(sidecar, f, indent=2)
+    logging.info(f"JSON sidecar scaler saved: {sidecar_path}")
+
     print("\nScaler params for C++ patching:")
     print(f"median = {scaler_params['median']}")
     print(f"iqr    = {scaler_params['iqr']}")

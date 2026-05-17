@@ -29,7 +29,7 @@ def parse_log(path: Path, threshold: float = 0.05):
     """Parse Snort log event lines. Infer alerts from score >= threshold."""
     event_re = re.compile(
         r'\[portscan\] ([0-9.]+) '
-        r'syns=(\d+) .*? '
+        r'syn=(\d+)/\S+ fnx=\d+ '
         r'score=([0-9.]+)'
     )
 
