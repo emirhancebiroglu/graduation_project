@@ -1,5 +1,5 @@
-// bot_client_inspector.cc — Per-source-IP bot client detection
-// GID:306, SID:1 — 7 features XGBoost on outgoing SYNs per src IP
+// bruteforce_inspector.cc — Per-source-IP brute force SSH/FTP detection
+// GID:307, SID:1 — 7 features XGBoost on outgoing SYNs per src IP
 
 #include <atomic>
 #include <cstdio>
@@ -13,12 +13,12 @@
 #include "log/messages.h"
 #include "protocols/packet.h"
 #include "protocols/tcp.h"
-#include "bot_client_flow_tracker.h"
+#include "bruteforce_flow_tracker.h"
 #include "scaler_loader.h"
 
-static const char* s_name = "bot_client_inspector";
-static const char* s_help = "per-source-IP bot client detection via outgoing SYN aggregation";
-static const uint32_t BCL_GID = 306, BCL_SID = 1;
+static const char* s_name = "bruteforce_inspector";
+static const char* s_help = "per-source-IP brute force detection via SYN aggregation";
+static const uint32_t BFC_GID = 307, BFC_SID = 1;
 
 static inline uint32_t gsip(snort::Packet* p) {
     if (!p) return 0; auto* ip = p->ptrs.ip_api.get_src();
@@ -30,27 +30,27 @@ static inline uint32_t gdip(snort::Packet* p) {
 }
 
 // AGG_SCALER_PARAMS_BEGIN
-BclScalerParams g_scaler = {
-    { 0.693147, 0.693147, 0.693147, 0.000000, 0.000000, 0.693147, 0.003328 },
-    { 0.405465, 1.000000, 0.405465, 1.000000, 0.693147, 1.000000, 0.003317 }
+BfcScalerParams g_scaler = {
+    { 3.044522, 1.791759, 1.098612, 0.105360, 0.559616, 0.287682, 1.106009 },
+    { 1.836550, 1.945910, 0.287682, 0.202415, 0.180537, 0.567857, 0.556752 }
 };
 // AGG_SCALER_PARAMS_END
 
 static const snort::RuleMap rules[] = {
-    { BCL_SID, "Bot client detection" }, { 0, nullptr }
+    { BFC_SID, "Brute force SSH/FTP detection" }, { 0, nullptr }
 };
-static const snort::Parameter bcl_params[] = {
+static const snort::Parameter bfc_params[] = {
     { "threshold",  snort::Parameter::PT_REAL,  "0.0:1.0", "0.50", "XGBoost threshold" },
     { "model_path", snort::Parameter::PT_STRING, nullptr,
-      "/home/emirhan/bitirme/models/bot_client_model.json", "model path" },
-    { "window_sec", snort::Parameter::PT_INT,   "1:600",   "300",  "window seconds" },
-    { "min_syns",   snort::Parameter::PT_INT,   "2:10000", "3",    "min outgoing SYNs" },
+      "/home/emirhan/bitirme/models/bruteforce_model.json", "model path" },
+    { "window_sec", snort::Parameter::PT_INT,   "1:600",   "60",   "window seconds" },
+    { "min_syns",   snort::Parameter::PT_INT,   "2:10000", "5",    "min outgoing SYNs" },
     { nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr }
 };
 
 class Mod : public snort::Module {
 public:
-    Mod() : snort::Module(s_name, s_help, bcl_params) {}
+    Mod() : snort::Module(s_name, s_help, bfc_params) {}
     const snort::RuleMap* get_rules() const override { return rules; }
     bool set(const char*, snort::Value& v, snort::SnortConfig*) override {
         if (v.is("threshold"))  thr = v.get_real();
@@ -60,7 +60,7 @@ public:
         else return false; return true;
     }
     Usage get_usage() const override { return INSPECT; }
-    double thr = 0.50; std::string mp; uint32_t ws = 300, mn = 3;
+    double thr = 0.50; std::string mp; uint32_t ws = 60, mn = 5;
 };
 
 class Xgb {
@@ -71,7 +71,7 @@ public:
         if (XGBoosterCreate(nullptr, 0, &b) != 0) return false;
         if (XGBoosterLoadModel(b, p.c_str()) != 0) { XGBoosterFree(b); b=nullptr; return false; }
         XGBoosterSetParam(b, "nthread", "1"); ready = true;
-        snort::LogMessage("[botcl] Model: %s\n", p.c_str()); return true;
+        snort::LogMessage("[bfc] Model: %s\n", p.c_str()); return true;
     }
     bool run(const float* f, float& s) {
         if (!ready) return false;
@@ -91,11 +91,11 @@ public:
     Insp(Mod* m) { thr=m->thr; mp=m->mp; ws=m->ws; mn=m->mn; }
 
     bool configure(snort::SnortConfig*) override {
-        if (!xgb.load(mp)) snort::ErrorMessage("[botcl] Model load failed.\n");
+        if (!xgb.load(mp)) snort::ErrorMessage("[bfc] Model load failed.\n");
         if (load_scaler_json(mp, g_scaler, AGG_FEATURE_COUNT))
-            snort::LogMessage("[botcl] Loaded scaler from JSON\n");
+            snort::LogMessage("[bfc] Loaded scaler from JSON\n");
         else
-            snort::LogMessage("[botcl] Using hardcoded scaler params\n");
+            snort::LogMessage("[bfc] Using hardcoded scaler params\n");
         return true;
     }
 
@@ -115,7 +115,7 @@ public:
 
         auto it = profs.find(src);
         if (it == profs.end()) {
-            BclProfile pr; pr.reset(src, now);
+            BfcProfile pr; pr.reset(src, now);
             pr.add_syn(dst, dp, now);
             profs[src] = pr; return;
         }
@@ -129,7 +129,6 @@ public:
         if (!pr.inference_done && pr.syn_count >= mn && pr.is_window_expired(now, ws))
             infer(pr, now);
 
-        // Periodic sweep for expired windows
         static uint32_t sweep = 0;
         if (++sweep % 1000 == 0) {
             for (auto& kv : profs) {
@@ -143,21 +142,21 @@ public:
 private:
     double thr; std::string mp; uint32_t ws, mn;
     Xgb xgb;
-    std::unordered_map<uint32_t, BclProfile> profs;
+    std::unordered_map<uint32_t, BfcProfile> profs;
     static std::atomic<uint64_t> n_inf, n_alert;
 
-    void infer(BclProfile& pr, double now) {
+    void infer(BfcProfile& pr, double now) {
         double raw[7], proc[7];
         pr.compute_features(raw, ws);
         memcpy(proc, raw, sizeof(raw));
-        BclProfile::preprocess(proc, g_scaler);
+        BfcProfile::preprocess(proc, g_scaler);
         float f[7]; for (unsigned i=0;i<7;i++) f[i] = proc[i];
         float score = 0; if (xgb.ok()) xgb.run(f, score);
         pr.inference_done = true; n_inf++;
 
         { static FILE* df = nullptr;
-          if (!df) { df = fopen("/tmp/botcl_train_data.txt","w");
-            if(df) fprintf(df,"# lb syn_cnt dst_ips dst_ports iat_cv entropy port_ratio rate score src_ip\n"); }
+          if (!df) { df = fopen("/tmp/bfc_train_data.txt","w");
+            if(df) fprintf(df,"# lb syn_cnt dst_ips dst_ports port_ratio single_port_rate rate iat_cv score src_ip\n"); }
           if(df) { int lbl=0;
             fprintf(df,"%d",lbl);
             for(unsigned i=0;i<7;i++) fprintf(df," %.6f",raw[i]);
@@ -165,14 +164,16 @@ private:
 
         bool alert = score > thr;
 
-        snort::LogMessage("[botcl] %u.%u.%u.%u syns=%u dsts=%zu ports=%zu iat_cv=%.3f score=%.4f\n",
+        snort::LogMessage("[bfc] %u.%u.%u.%u syns=%u dsts=%zu ports=%zu sps=%.3f score=%.4f\n",
             (pr.src_ip>>24)&0xFF,(pr.src_ip>>16)&0xFF,(pr.src_ip>>8)&0xFF,pr.src_ip&0xFF,
-            pr.syn_count, pr.syn_dst_ips.size(), pr.syn_dst_ports.size(), pr.iat_cv(), score);
+            pr.syn_count, pr.syn_dst_ips.size(), pr.syn_dst_ports.size(),
+            pr.single_port_score(), score);
 
         if (alert) {
-            n_alert++; snort::DetectionEngine::queue_event(BCL_GID, BCL_SID);
-            snort::LogMessage("[botcl] ALERT: %u.%u.%u.%u score=%.4f\n",
-                (pr.src_ip>>24)&0xFF,(pr.src_ip>>16)&0xFF,(pr.src_ip>>8)&0xFF,pr.src_ip&0xFF, score);
+            n_alert++; snort::DetectionEngine::queue_event(BFC_GID, BFC_SID);
+            snort::LogMessage("[bfc] ALERT: %u.%u.%u.%u score=%.4f syns=%u ports=%zu\n",
+                (pr.src_ip>>24)&0xFF,(pr.src_ip>>16)&0xFF,(pr.src_ip>>8)&0xFF,pr.src_ip&0xFF,
+                score, pr.syn_count, pr.syn_dst_ports.size());
         }
     }
 };

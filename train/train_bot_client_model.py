@@ -12,7 +12,7 @@ def log(m):
 
 WINDOW_SEC = 300
 FEAT_NAMES = ['syn_count','dst_ips','dst_ports','iat_cv','port_entropy','port_ratio','rate']
-NEG_SAMPLE_CAP = 200000
+NEG_SAMPLE_CAP = 400000
 
 def safe_int(v, default=0):
     try:
@@ -47,6 +47,42 @@ def parse_cicids_csv_src(path, label_val, sample=None):
             'timestamp': ts,
         })
     return flows
+
+
+FP_IPS = {
+    '192.168.10.3', '192.168.10.16', '192.168.10.19',
+    '192.168.10.25', '192.168.10.50', '192.168.10.51',
+    '172.16.0.1',
+    '192.168.10.5', '192.168.10.8', '192.168.10.9',
+    '192.168.10.12', '192.168.10.14', '192.168.10.15', '192.168.10.17',
+}
+
+
+def parse_cicids_csv_src_filtered(path, label_val, src_ips, max_flows=50000):
+    label_col = ' Label'
+    cols = [label_col, ' Source IP', ' Destination IP', ' Destination Port', ' Timestamp']
+    dtypes = {c: str for c in cols}
+    df = pd.read_csv(path, low_memory=False, encoding='cp1252',
+                     usecols=cols, dtype=dtypes)
+    df = df[df[label_col].str.strip() == label_val]
+    df = df[df[' Source IP'].str.strip().isin(src_ips)]
+    if len(df) > max_flows:
+        df = df.sample(max_flows, random_state=42)
+    log(f'  {os.path.basename(path)}: {len(df)} {label_val} flows from FP IPs')
+    flows = []
+    for _, r in df.iterrows():
+        try:
+            ts = pd.to_datetime(r[' Timestamp']).timestamp()
+        except:
+            ts = 0.0
+        flows.append({
+            'src_ip': r[' Source IP'].strip(),
+            'dst_ip': r[' Destination IP'].strip(),
+            'dst_port': safe_int(r[' Destination Port']),
+            'timestamp': ts,
+        })
+    return flows
+
 
 CTU_COLS = ['StartTime','Proto','SrcAddr','Sport','DstAddr','Dport','Label']
 CTU_DTYPES = {'StartTime': str, 'Proto': str, 'SrcAddr': str, 'Sport': str,
@@ -86,7 +122,7 @@ def parse_ctu_botnet_only(path):
     return pos, bot_src_ips
 
 def aggregate_src_windows(flows, window_sec, bot_src_ips=None):
-    """Aggregate outgoing flows by src IP in time windows.
+    """Aggregate outgoing flows by src IP in non-overlapping time windows.
     Label = 1 if src IP is a known bot client."""
     groups = defaultdict(lambda: defaultdict(list))
     for f in flows:
@@ -123,7 +159,57 @@ def aggregate_src_windows(flows, window_sec, bot_src_ips=None):
                 'syn_count': n, 'dst_ips': dst_ips, 'dst_ports': dst_ports,
                 'iat_cv': iat_cv, 'port_entropy': entropy,
                 'port_ratio': port_ratio, 'rate': rate,
-                'label': 1 if is_bot else 0
+                'label': 1 if is_bot else 0,
+                'win_start': win_start,
+            })
+    return samples
+
+
+def aggregate_src_windows_stride(flows, window_sec, stride_sec, bot_src_ips=None):
+    """Aggregate outgoing flows by src IP in sliding time windows (stride < window_sec).
+    Generates overlapping windows at multiple alignments for data augmentation."""
+    groups = defaultdict(lambda: defaultdict(list))
+    for f in flows:
+        src = f['src_ip']
+        ts = f['timestamp']
+        first_win = int((ts - window_sec + stride_sec) / stride_sec) * stride_sec
+        if first_win < 0:
+            first_win = 0
+        last_win = int(ts / stride_sec) * stride_sec
+        for win_start in range(first_win, last_win + 1, stride_sec):
+            groups[src][win_start].append(f)
+    samples = []
+    for src_ip, windows in groups.items():
+        is_bot = bot_src_ips and src_ip in bot_src_ips
+        for win_start, flist in windows.items():
+            syn_ts = sorted([f['timestamp'] for f in flist])
+            dst_ips = len(set(f['dst_ip'] for f in flist))
+            dst_ports = len(set(f['dst_port'] for f in flist))
+            n = len(flist)
+            iat_cv = 0.0
+            if len(syn_ts) >= 3:
+                diffs = [syn_ts[i] - syn_ts[i-1] for i in range(1, len(syn_ts))]
+                diffs = [d for d in diffs if d > 1e-6]
+                if len(diffs) >= 2:
+                    m = np.mean(diffs)
+                    s = np.std(diffs)
+                    iat_cv = s / m if m > 1e-6 else 0.0
+            port_ratio = dst_ports / n if n > 0 else 0.0
+            rate = n / window_sec
+            port_counts = defaultdict(int)
+            for f in flist:
+                port_counts[f['dst_port']] += 1
+            entropy = 0.0
+            if n > 1:
+                for cnt in port_counts.values():
+                    p = cnt / n
+                    entropy -= p * np.log2(p) if p > 0 else 0.0
+            samples.append({
+                'syn_count': n, 'dst_ips': dst_ips, 'dst_ports': dst_ports,
+                'iat_cv': iat_cv, 'port_entropy': entropy,
+                'port_ratio': port_ratio, 'rate': rate,
+                'label': 1 if is_bot else 0,
+                'win_start': win_start,
             })
     return samples
 
@@ -133,42 +219,36 @@ def main():
     log('='*60)
     log('')
 
-    # ─── 1. Load CTU-13 data ─────────────────────────────────
+    # ─── 1. Load CICIDS bot client flows (positive) ──────────
     pos_flows = []
     neg_flows = []
     bot_src_ips = set()
-    ctu_dir = '/home/emirhan/bitirme/data/raw/ctu13_binetflow'
-    botnet_only = os.path.join(ctu_dir, 'ctu13_botnet_only.csv')
-    if os.path.exists(botnet_only):
-        log('[1] Loading CTU-13 botnet-only for bot client extraction...')
-        p, b = parse_ctu_botnet_only(botnet_only)
-        pos_flows.extend(p)
-        bot_src_ips.update(b)
-        log(f'  CTU bot src IPs: {sorted(bot_src_ips)[:10]}...')
-
-    # ─── 2. Add CICIDS bot client flows ──────────────────────
-    friday = '/home/emirhan/bitirme/data/raw/cicids2017/Friday-WorkingHours-Morning.pcap_ISCX.csv'
+    cicids_dir = '/home/emirhan/bitirme/data/raw/cicids2017'
+    friday = os.path.join(cicids_dir, 'Friday-WorkingHours-Morning.pcap_ISCX.csv')
     cicids_bot_srcs = {'192.168.10.5','192.168.10.8','192.168.10.9',
                        '192.168.10.14','192.168.10.15','192.168.10.12','192.168.10.17'}
+    log('[1] Loading CICIDS Friday-Morning Bot flows (positives)...')
     if os.path.exists(friday):
-        log('[2] Loading CICIDS Friday-Morning Bot flows...')
         bot_flows = parse_cicids_csv_src(friday, 'Bot')
         for f in bot_flows:
             if f['src_ip'] in cicids_bot_srcs:
                 pos_flows.append(f)
-        log(f'  CICIDS bot src flows added: {sum(1 for f in bot_flows if f["src_ip"] in cicids_bot_srcs)}')
+        # Duplicate 192.168.10.5 flows 3x for better representation
+        extra_5 = [f for f in pos_flows if f['src_ip'] == '192.168.10.5']
+        pos_flows.extend(extra_5 * 2)
+        log(f'  {len(pos_flows)} bot flows (192.168.10.5 duplicated 3x)')
         bot_src_ips.update(cicids_bot_srcs)
 
-    log(f'\n  Total pos flows: {len(pos_flows)}, Total neg flows: {len(neg_flows)}')
+    log(f'\n  Total pos flows: {len(pos_flows)}')
 
-    # ─── 3. Load CICIDS BENIGN flows as negative ─────────────
-    log('\n[3] Loading CICIDS BENIGN samples...')
-    cicids_dir = '/home/emirhan/bitirme/data/raw/cicids2017'
+    # ─── 2. Load CICIDS BENIGN flows as negative ─────────────
+    log('[2] Loading CICIDS BENIGN flows (negatives)...')
     benign_sources = [
-        ('Monday-WorkingHours.pcap_ISCX.csv', 'BENIGN', 100000),
-        ('Tuesday-WorkingHours.pcap_ISCX.csv', 'BENIGN', 50000),
-        ('Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv', 'BENIGN', 25000),
-        ('Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv', 'BENIGN', 25000),
+        ('Monday-WorkingHours.pcap_ISCX.csv', 'BENIGN', 150000),
+        ('Tuesday-WorkingHours.pcap_ISCX.csv', 'BENIGN', 100000),
+        ('Wednesday-workingHours.pcap_ISCX.csv', 'BENIGN', 50000),
+        ('Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv', 'BENIGN', 50000),
+        ('Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv', 'BENIGN', 50000),
     ]
     for fname, label, cap in benign_sources:
         path = os.path.join(cicids_dir, fname)
@@ -182,7 +262,6 @@ def main():
     # ─── 4. Aggregate by src IP in windows ───────────────────
     log(f'\n[4] Aggregating into {WINDOW_SEC}s windows by src IP...')
     pos_agg = aggregate_src_windows(pos_flows, WINDOW_SEC, bot_src_ips)
-    # Only take positive-labeled windows from pos_flows
     pos_agg = [s for s in pos_agg if s['label'] == 1]
     log(f'  Positive windows: {len(pos_agg)}')
 

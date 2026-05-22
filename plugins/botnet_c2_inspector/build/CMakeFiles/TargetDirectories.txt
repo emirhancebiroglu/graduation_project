@@ -1,3 +1,0 @@
-/home/emirhan/bitirme/plugins/botnet_c2_inspector/build/CMakeFiles/botnet_c2_inspector.dir
-/home/emirhan/bitirme/plugins/botnet_c2_inspector/build/CMakeFiles/edit_cache.dir
-/home/emirhan/bitirme/plugins/botnet_c2_inspector/build/CMakeFiles/rebuild_cache.dir

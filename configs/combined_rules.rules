@@ -12,3 +12,6 @@ alert ip any any -> any any ( gid:301; sid:3; rev:1; msg:"DoS slow-rate detected
 
 # Bot Client stub — GID=306
 alert tcp any any -> any any ( gid:306; sid:1; rev:1; msg:"Bot client detected"; classtype:misc-activity; )
+
+# Brute Force stub — GID=307
+alert tcp any any -> any any ( gid:307; sid:1; rev:1; msg:"Brute force SSH/FTP detected"; classtype:misc-activity; )

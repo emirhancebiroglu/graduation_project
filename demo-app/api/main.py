@@ -53,7 +53,7 @@ _FROZEN_CONFIG: dict[str, Any] = {
     "threshold": 0.90,
     "max_packets": 2,
     "rule3_suppressed_ports": [53, 137, 389],
-    "model": "fine_tuned_xgb_model.json",
+    "model": "dos_model.json",
     "metrics": {
         "TP": 252610,
         "TN": 432352,

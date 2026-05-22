@@ -144,13 +144,6 @@ dos_aggregator =
 }
 
 -- ─── Botnet C2 Inspector (Cross-flow SYN per dst IP) ──
-botnet_c2_inspector =
-{
-    threshold    = 0.50,
-    model_path   = "/home/emirhan/bitirme/models/botnet_c2_model.json",
-    window_sec   = 120,
-    min_syns     = 3,
-}
 
 -- ─── Bot Client Inspector (Per-src-IP outgoing SYN) ──
 bot_client_inspector =
@@ -159,4 +152,13 @@ bot_client_inspector =
     model_path   = "/home/emirhan/bitirme/models/bot_client_model.json",
     window_sec   = 300,
     min_syns     = 3,
+}
+
+-- ─── Brute Force Inspector (Per-src-IP SYN, GID:307) ──
+bruteforce_inspector =
+{
+    threshold    = 0.85,
+    model_path   = "/home/emirhan/bitirme/models/bruteforce_model.json",
+    window_sec   = 60,
+    min_syns     = 5,
 }

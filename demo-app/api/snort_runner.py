@@ -18,8 +18,8 @@ logger = logging.getLogger("snort-runner")
 
 _HOME = Path.home()
 _SNORT_CWD = "/usr/local/etc/snort"
-_XGB_CONFIG = str(_HOME / "bitirme/configs/snort_xgb.lua")
-_XGB_PLUGIN = str(_HOME / "bitirme/plugins/xgb_inspector/build")
+_XGB_CONFIG = str(_HOME / "bitirme/configs/snort_dos.lua")
+_XGB_PLUGIN = str(_HOME / "bitirme/plugins/dos_inspector/build")
 _COMMUNITY_CONFIG = str(_HOME / "bitirme/configs/snort_community.lua")
 _RUN_ROOT = Path("/tmp/demo-runs")
 

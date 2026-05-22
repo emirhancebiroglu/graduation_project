@@ -1,1 +1,0 @@
-/usr/bin/c++ -fPIC -O3 -DNDEBUG -shared  -o botnet_c2_inspector.so CMakeFiles/botnet_c2_inspector.dir/src/botnet_c2_inspector.cc.o   -L/home/emirhan/snort_src/xgboost/lib  -Wl,-rpath,/home/emirhan/snort_src/xgboost/lib -lxgboost 
