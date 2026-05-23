@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { Alert, Engine } from "@/lib/types";
+import type { Alert, Engine, ShapContribution } from "@/lib/types";
 
 type Filter = "all" | "xgboost" | "community";
 
@@ -60,6 +60,22 @@ function gtBadge(gt: string | null | undefined): React.ReactNode {
   return null;
 }
 
+function ifBadge(ifLabel: string | null | undefined): React.ReactNode {
+  if (!ifLabel) return null;
+  if (ifLabel === "anomaly_candidate") {
+    return (
+      <span className="text-[8px] font-mono px-1 py-0.5 font-bold" style={{ border: "1px solid rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.1)", color: "#fbbf24", letterSpacing: "0.05em" }}>
+        ANOMALY
+      </span>
+    );
+  }
+  return (
+    <span className="text-[8px] font-mono px-1 py-0.5 font-bold" style={{ border: "1px solid rgba(100,116,139,0.3)", background: "rgba(100,116,139,0.08)", color: "rgba(100,116,139,0.6)", letterSpacing: "0.05em" }}>
+      KNOWN
+    </span>
+  );
+}
+
 const FILTERS: { label: string; value: Filter }[] = [
   { label: "ALL", value: "all" },
   { label: "XGBOOST", value: "xgboost" },
@@ -70,8 +86,37 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState<Alert | null>(null);
   const [userScrolled, setUserScrolled] = useState(false);
+  const [shap, setShap] = useState<ShapContribution[] | null>(null);
+  const [shapLoading, setShapLoading] = useState(false);
+  const [shapError, setShapError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const prevAlertCount = useRef(alerts.length);
+
+  async function fetchShap(alertId: string) {
+    setShapLoading(true);
+    setShapError(null);
+    setShap(null);
+    try {
+      const res = await fetch(`http://localhost:8000/api/explain/${alertId}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setShapError(body.detail ?? `HTTP ${res.status}`);
+        return;
+      }
+      setShap(await res.json());
+    } catch (e) {
+      setShapError(String(e));
+    } finally {
+      setShapLoading(false);
+    }
+  }
+
+  function handleSelectAlert(a: Alert) {
+    setSelected(a);
+    setShap(null);
+    setShapError(null);
+    setShapLoading(false);
+  }
 
   // Use per-engine buffer for XGBOOST/COMMUNITY filters so community alerts are never
   // squeezed out of the combined 1000-cap array by the high XGBoost volume.
@@ -166,7 +211,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
             return (
               <div
                 key={a.id}
-                onClick={() => setSelected(a)}
+                onClick={() => handleSelectAlert(a)}
                 className="ids-row grid gap-2 px-2 py-2 cursor-pointer transition-all"
                 style={{
                   gridTemplateColumns: "80px 80px 72px 1fr 1fr 50px 60px 1fr",
@@ -234,7 +279,50 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
                 {selected.ground_truth && (
                   <Row label="GROUND TRUTH" value={selected.ground_truth === "attack" ? "REAL ATTACK" : "FALSE ALARM"} />
                 )}
+                {selected.if_label && (
+                  <div className="flex gap-3 items-center">
+                    <span className="text-[10px] font-mono w-28 shrink-0" style={{ color: "rgba(0,212,255,0.4)", letterSpacing: "0.1em" }}>IF ANOMALY</span>
+                    <span className="flex items-center gap-2">
+                      {ifBadge(selected.if_label)}
+                      {selected.if_score != null && (
+                        <span className="text-[10px] font-mono tabular-nums" style={{ color: "rgba(100,116,139,0.6)" }}>
+                          score={selected.if_score.toFixed(4)}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                )}
               </div>
+
+              {/* SHAP Explain — XGBoost only */}
+              {selected.engine === "xgboost" && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => fetchShap(selected.id)}
+                      disabled={shapLoading}
+                      className="text-[10px] font-mono px-3 py-1 transition-all"
+                      style={{
+                        border: "1px solid rgba(0,212,255,0.3)",
+                        background: shapLoading ? "rgba(0,212,255,0.05)" : "transparent",
+                        color: shapLoading ? "rgba(0,212,255,0.4)" : "#00d4ff",
+                        letterSpacing: "0.08em",
+                        cursor: shapLoading ? "wait" : "pointer",
+                      }}
+                    >
+                      {shapLoading ? "COMPUTING…" : "EXPLAIN (SHAP)"}
+                    </button>
+                    <span className="text-[9px] font-mono" style={{ color: "rgba(100,116,139,0.4)" }}>top-5 features</span>
+                  </div>
+                  {shapError && (
+                    <div className="text-[10px] font-mono p-2" style={{ background: "rgba(255,59,59,0.07)", border: "1px solid rgba(255,59,59,0.2)", color: "#ff3b3b" }}>
+                      {shapError}
+                    </div>
+                  )}
+                  {shap && <ShapChart contributions={shap} />}
+                </div>
+              )}
+
               <details>
                 <summary className="text-[10px] font-mono cursor-pointer select-none" style={{ color: "rgba(0,212,255,0.4)" }}>
                   RAW JSON ▸
@@ -256,6 +344,52 @@ function Row({ label, value }: { label: string; value: string }) {
     <div className="flex gap-3">
       <span className="text-[10px] font-mono w-28 shrink-0" style={{ color: "rgba(0,212,255,0.4)", letterSpacing: "0.1em" }}>{label}</span>
       <span className="text-[10px] font-mono break-all" style={{ color: "#94a3b8" }}>{value}</span>
+    </div>
+  );
+}
+
+function ShapChart({ contributions }: { contributions: ShapContribution[] }) {
+  const maxAbs = Math.max(...contributions.map((c) => Math.abs(c.shap_value)), 0.001);
+  return (
+    <div className="rounded-none p-3 space-y-2" style={{ background: "rgba(0,0,0,0.3)", border: "1px solid rgba(0,212,255,0.08)" }}>
+      <div className="text-[9px] font-mono mb-2" style={{ color: "rgba(0,212,255,0.35)", letterSpacing: "0.1em" }}>
+        FEATURE CONTRIBUTIONS (SHAP)
+      </div>
+      {contributions.map((c) => {
+        const pct = Math.abs(c.shap_value) / maxAbs * 100;
+        const isAttack = c.direction === "attack";
+        const barColor = isAttack ? "#ff3b3b" : "#10b981";
+        return (
+          <div key={c.feature} className="space-y-0.5">
+            <div className="flex justify-between items-center">
+              <span className="text-[10px] font-mono" style={{ color: "#94a3b8" }}>{c.feature}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-mono tabular-nums" style={{ color: "rgba(100,116,139,0.6)" }}>
+                  val={c.raw_value}
+                </span>
+                <span className="text-[9px] font-mono tabular-nums font-bold" style={{ color: barColor }}>
+                  {c.shap_value > 0 ? "+" : ""}{c.shap_value.toFixed(3)}
+                </span>
+              </div>
+            </div>
+            <div className="relative h-1.5 rounded-none" style={{ background: "rgba(100,116,139,0.12)" }}>
+              <div
+                className="absolute top-0 h-full transition-all"
+                style={{
+                  width: `${pct}%`,
+                  background: barColor,
+                  opacity: 0.7,
+                  left: 0,
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+      <div className="flex gap-4 pt-1">
+        <span className="text-[9px] font-mono" style={{ color: "rgba(255,59,59,0.6)" }}>■ pushes toward attack</span>
+        <span className="text-[9px] font-mono" style={{ color: "rgba(16,185,129,0.6)" }}>■ pushes toward benign</span>
+      </div>
     </div>
   );
 }

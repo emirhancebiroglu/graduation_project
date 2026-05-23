@@ -1,0 +1,70 @@
+version: "3.9"
+
+# Bridge network — Snort listens on br-ids interface, target+attacker communicate on it
+networks:
+  ids_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+
+services:
+
+  # ── Target: nginx HTTP server ────────────────────────────────────
+  target:
+    image: nginx:alpine
+    container_name: ids_target
+    networks:
+      ids_net:
+        ipv4_address: 172.20.0.10
+    ports: []
+    restart: "no"
+
+  # ── Attacker: tools container ────────────────────────────────────
+  attacker:
+    build:
+      context: .
+      dockerfile: Dockerfile.attacker
+    image: aegis-attacker:latest
+    container_name: ids_attacker
+    networks:
+      ids_net:
+        ipv4_address: 172.20.0.20
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    command: sleep infinity
+    restart: "no"
+
+  # ── Snort: live capture on bridge interface ───────────────────────
+  snort:
+    image: aegis-snort:latest
+    container_name: ids_snort
+    network_mode: "service:target"   # share target's network namespace — sees all target traffic
+    depends_on:
+      - target
+    privileged: true
+    volumes:
+      # Snort binary + DAQ
+      - /usr/local/bin/snort:/usr/local/bin/snort:ro
+      - /usr/local/lib:/usr/local/lib:ro
+      - /usr/local/include:/usr/local/include:ro
+      # XGBoost shared lib
+      - /home/emirhan/snort_src/xgboost/lib:/home/emirhan/snort_src/xgboost/lib:ro
+      # Snort default configs (snort_defaults.lua etc.)
+      - /usr/local/etc/snort:/usr/local/etc/snort:ro
+      # Project: plugins, models, configs
+      - /home/emirhan/bitirme/plugins:/home/emirhan/bitirme/plugins:ro
+      - /home/emirhan/bitirme/models:/home/emirhan/bitirme/models:ro
+      - /home/emirhan/bitirme/configs:/home/emirhan/bitirme/configs:ro
+      # Sim configs (snort_docker.lua)
+      - /home/emirhan/bitirme/docker/snort-sim:/home/emirhan/bitirme/docker/snort-sim:ro
+      # PCAPs for -r mode testing
+      - /home/emirhan/bitirme/pcaps:/home/emirhan/bitirme/pcaps:ro
+      - /home/emirhan/bitirme/demo-app/api/pcaps:/home/emirhan/bitirme/demo-app/api/pcaps:ro
+      # Output dir (writable)
+      - /home/emirhan/bitirme/docker/snort-sim/output:/output
+    environment:
+      - LD_LIBRARY_PATH=/home/emirhan/snort_src/xgboost/lib:/usr/local/lib
+    command: sleep infinity
+    restart: "no"

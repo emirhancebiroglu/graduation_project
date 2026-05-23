@@ -2,13 +2,22 @@
 import { useEffect, useState } from "react";
 import { useIdsStream } from "@/lib/use-ids-stream";
 import { AttackControl } from "@/components/attack-control";
+import { AlertFeed } from "@/components/alert-feed";
 import { EvaluationReport } from "@/components/evaluation-report";
 import { ImpactSummary } from "@/components/impact-summary";
 
 export default function Page() {
   const stream = useIdsStream();
   const [isStarting, setIsStarting] = useState(false);
-  const { connected, snortRunning, pcapProgress, replayPhase, evaluation, recentAlerts } = stream;
+  const { connected, snortRunning, pcapProgress, replayPhase, evaluation, recentAlerts, alerts, engineAlerts } = stream;
+  const [feedAlerts, setFeedAlerts] = useState(alerts);
+  const [feedEngineAlerts, setFeedEngineAlerts] = useState(engineAlerts);
+
+  // Sync feed with stream but allow manual clear
+  useEffect(() => {
+    setFeedAlerts(alerts);
+    setFeedEngineAlerts(engineAlerts);
+  }, [alerts, engineAlerts]);
 
   const [clockStr, setClockStr] = useState<string | null>(null);
   useEffect(() => {
@@ -169,6 +178,38 @@ export default function Page() {
           snortRunning={effectiveRunning}
           onStarting={(v) => setIsStarting(v)}
         />
+
+        {/* Alert Feed — live alerts with IF anomaly tags + SHAP explain */}
+        {(feedAlerts.length > 0 || replayPhase === "running") && (
+          <div
+            className="relative"
+            style={{
+              border: "1px solid rgba(0,212,255,0.12)",
+              background: "#0f1318",
+              minHeight: "320px",
+              maxHeight: "480px",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <div className="absolute top-0 left-0 w-3 h-3 border-t border-l" style={{ borderColor: "rgba(0,212,255,0.3)" }} />
+            <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r" style={{ borderColor: "rgba(0,212,255,0.3)" }} />
+            <div className="flex items-center gap-3 px-5 py-3 border-b" style={{ borderColor: "rgba(0,212,255,0.08)" }}>
+              <div className="w-1 h-4" style={{ background: "rgba(0,212,255,0.7)", boxShadow: "0 0 8px rgba(0,212,255,0.4)" }} />
+              <span className="section-label" style={{ color: "#00d4ff" }}>LIVE ALERT FEED</span>
+              <span className="section-label ml-2 text-[9px]" style={{ color: "rgba(0,212,255,0.35)" }}>
+                {feedAlerts.length} alerts · click row to explain
+              </span>
+            </div>
+            <div className="flex-1 overflow-hidden p-3">
+              <AlertFeed
+                alerts={feedAlerts}
+                engineAlerts={feedEngineAlerts}
+                onClear={() => { setFeedAlerts([]); setFeedEngineAlerts({ xgboost: [], community: [] }); }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Footer */}

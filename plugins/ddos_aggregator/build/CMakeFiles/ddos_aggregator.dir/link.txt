@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -O3 -DNDEBUG -shared  -o ddos_aggregator.so CMakeFiles/ddos_aggregator.dir/src/ddos_inspector.cc.o   -L/home/emirhan/snort_src/xgboost/lib  -Wl,-rpath,/home/emirhan/snort_src/xgboost/lib -lxgboost 

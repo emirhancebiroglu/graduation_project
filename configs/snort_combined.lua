@@ -1,7 +1,7 @@
----------------------------------------------------------------------------
--- snort_combined.lua — Combined Run Config
--- Bitirme Projesi: IDS Performans Karşılaştırma
--- Aynı anda: ml_inspector (LSTM) + xgb_inspector (XGBoost) + Community Rules
+﻿---------------------------------------------------------------------------
+-- snort_combined.lua â€” Combined Run Config
+-- Bitirme Projesi: IDS Performans KarÅŸÄ±laÅŸtÄ±rma
+-- AynÄ± anda: ml_inspector (LSTM) + xgb_inspector (XGBoost) + Community Rules
 ---------------------------------------------------------------------------
 
 HOME_NET     = 'any'
@@ -9,7 +9,7 @@ EXTERNAL_NET = 'any'
 
 include 'snort_defaults.lua'
 
--- ─── Inspection ───────────────────────────────────────────────
+-- â”€â”€â”€ Inspection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 stream = { } stream_ip = { } stream_icmp = { }
 stream_tcp = { } stream_udp = { } stream_user = { } stream_file = { }
 
@@ -35,7 +35,7 @@ file_policy  = { }
 js_norm      = default_js_norm
 appid        = { }
 
--- ─── Bindings ─────────────────────────────────────────────────
+-- â”€â”€â”€ Bindings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 wizard = default_wizard
 
 binder =
@@ -84,7 +84,7 @@ binder =
     { use = { type = 'wizard' } }
 }
 
--- ─── Detection ────────────────────────────────────────────────
+-- â”€â”€â”€ Detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 references      = default_references
 classifications = default_classifications
 
@@ -93,23 +93,23 @@ ips =
     -- enable_builtin_rules: Snort3 decoder/inspector built-in alert'leri
     -- enable_builtin_rules = true,
 
-    -- combined_rules.rules içinde community rules include edilir.
+    -- combined_rules.rules iÃ§inde community rules include edilir.
     -- LSTM (GID=300) ve XGBoost (GID=301) plugin'lerin get_rules() ile register olur.
     include = '/home/emirhan/bitirme/configs/combined_rules.rules',
 
     variables = default_variables
 }
 
--- ─── Outputs ──────────────────────────────────────────────────
--- alert_csv'ye tüm alertler yazılır (GID ile ayırt edilir)
+-- â”€â”€â”€ Outputs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- alert_csv'ye tÃ¼m alertler yazÄ±lÄ±r (GID ile ayÄ±rt edilir)
 alert_csv = { file = true }
 
--- ─── Tweaks ───────────────────────────────────────────────────
+-- â”€â”€â”€ Tweaks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 if ( tweaks ~= nil ) then
     include(tweaks .. '.lua')
 end
 
--- ─── ML Inspector (LSTM) ──────────────────────────────────────
+-- â”€â”€â”€ ML Inspector (LSTM) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 ml_inspector =
 {
     threshold   = 0.55,
@@ -117,10 +117,49 @@ ml_inspector =
     model_path  = "/home/emirhan/bitirme/models/fine_tuned_lstm_model.tflite",
 }
 
--- ─── XGBoost Inspector ────────────────────────────────────────
-xgb_inspector =
+-- â”€â”€â”€ DoS Inspector (per-flow XGBoost, GID:301) â€” v3b (15 features, CIC+UNSW mixed)
+dos_inspector =
 {
-    threshold   = 0.50,
-    max_packets = 2,
-    model_path  = "/home/emirhan/bitirme/models/fine_tuned_xgb_model.json",
+    threshold   = 0.90,
+    max_packets = 8,
+    model_path  = "/home/emirhan/bitirme/models/dos_fpr_opt_v3b.json",
+}
+
+-- â”€â”€â”€ PortScan Inspector (TCP SYN cross-flow) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+portscan_inspector =
+{
+    threshold    = 0.90,
+    model_path   = "/home/emirhan/bitirme/models/portscan_aggregator_model_v4d.json",
+    window_sec   = 60,
+    min_packets  = 5,
+    min_dst_ports = 30,
+}
+
+-- â”€â”€â”€ DoS Aggregator (Cross-flow SYN rate) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+dos_aggregator =
+{
+    threshold    = 0.30,
+    model_path   = "/home/emirhan/bitirme/models/dos_aggregator_model.json",
+    window_sec   = 60,
+    min_syns     = 3,
+}
+
+-- â”€â”€â”€ Botnet C2 Inspector (Cross-flow SYN per dst IP) â”€â”€
+
+-- â”€â”€â”€ Bot Client Inspector (Per-src-IP outgoing SYN) â”€â”€
+bot_client_inspector =
+{
+    threshold    = 0.85,
+    model_path   = "/home/emirhan/bitirme/models/bot_client_model.json",
+    window_sec   = 300,
+    min_syns     = 3,
+}
+
+-- â”€â”€â”€ Brute Force Inspector (Per-src-IP SYN, GID:307) â”€â”€
+bruteforce_inspector =
+{
+    threshold    = 0.85,
+    model_path   = "/home/emirhan/bitirme/models/bruteforce_model.json",
+    window_sec   = 60,
+    min_syns     = 5,
 }

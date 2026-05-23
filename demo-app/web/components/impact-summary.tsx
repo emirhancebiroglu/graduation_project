@@ -186,6 +186,7 @@ export function ImpactSummary({ evaluation, replayPhase, pcapProgress, recentAle
     );
   }
 
+  if (!evaluation) return null;
   const xgb = evaluation.xgboost;
   const comm = evaluation.community;
   const fpGap = comm.FP - xgb.FP;

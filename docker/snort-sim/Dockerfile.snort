@@ -1,0 +1,18 @@
+FROM ubuntu:24.04
+RUN apt-get update -qq && \
+    apt-get install -y -qq --no-install-recommends \
+        libpcap0.8t64 \
+        libluajit-5.1-2 \
+        libdumbnet1 \
+        libhwloc15 \
+        libpcre2-8-0 \
+        libunwind8 \
+        libnuma1 \
+        libuuid1 \
+        libcap2 \
+        libmnl0 \
+        libgomp1 \
+        openssl \
+        iproute2 \
+    && rm -rf /var/lib/apt/lists/*
+ENV LD_LIBRARY_PATH=/home/emirhan/snort_src/xgboost/lib:/usr/local/lib

@@ -51,19 +51,19 @@ _counters: dict[Engine, dict[str, Any]] = {
 
 _FROZEN_CONFIG: dict[str, Any] = {
     "threshold": 0.90,
-    "max_packets": 2,
+    "max_packets": 8,
     "rule3_suppressed_ports": [53, 137, 389],
-    "model": "fine_tuned_xgb_model.json",
+    "model": "dos_fpr_opt_v3b.json",
     "metrics": {
-        "TP": 252610,
-        "TN": 432352,
-        "FP": 7679,
-        "FN": 62,
-        "Acc": 0.9888,
-        "Prec": 0.9705,
-        "Rec": 0.9998,
-        "F1": 0.9849,
-        "FPR": 0.0175,
+        "TP": 252657,
+        "TN": 432638,
+        "FP": 7393,
+        "FN": 15,
+        "Acc": 0.9893,
+        "Prec": 0.9716,
+        "Rec": 0.9999,
+        "F1": 0.9856,
+        "FPR": 0.0168,
     },
 }
 
@@ -166,12 +166,107 @@ async def _compute_and_broadcast_evaluation(run_dir: Path) -> None:
     else:
         logger.error("Missing results for one or both engines, not broadcasting")
 
+# ── IF enrichment ────────────────────────────────────────────────────────────
+
+import sys as _sys
+_sys.path.insert(0, str(Path.home() / "bitirme/scripts"))
+# Ensure ML packages (numpy, sklearn, xgboost, shap) are findable
+# demo-app .venv is minimal (no ML deps) — point to user site-packages
+_sys.path.insert(0, str(Path.home() / ".local/lib/python3.12/site-packages"))
+# System dist-packages needed for dateutil (used by pandas → shap)
+_sys.path.insert(0, "/usr/lib/python3/dist-packages")
+try:
+    from if_score_alert import score as _if_score
+    _IF_AVAILABLE = True
+except Exception as _e:
+    logger.warning("IF scorer unavailable: %s", _e)
+    _IF_AVAILABLE = False
+
+# Per-run XGB alert counter — used for sequential log line matching
+_xgb_alert_seq: int = 0
+_xgb_log_features: list[list[float]] = []  # populated by log tailer
+
+
+def _parse_log_features(line: str) -> list[float] | None:
+    """Extract raw feature vector from dos_inspector LogMessage line.
+
+    v3b format (15 features, swin/dwin removed):
+      [dos_inspector] s1-high pkts=8 score=0.9902 | dur=0.0000 sp=2 dp=0 sb=116 db=0 smsz=58 dmsz=0 si=0.0479 di=0.0000 fwd=58 bwd=0 fin=0 ack=2 syn=1 biat=0.0 sid=1
+    Returns 15 floats or None.
+    """
+    if "[dos_inspector]" not in line or "sid=" not in line:
+        return None
+    try:
+        def _val(key: str) -> float:
+            idx = line.index(key + "=")
+            start = idx + len(key) + 1
+            end = line.find(" ", start)
+            return float(line[start:] if end == -1 else line[start:end])
+        return [
+            _val("dur"), _val("sp"), _val("dp"),
+            _val("sb"), _val("db"), _val("smsz"), _val("dmsz"),
+            _val("si"), _val("di"),
+            _val("fwd"), _val("bwd"),
+            _val("fin"), _val("ack"), _val("syn"), _val("biat"),
+        ]
+    except (ValueError, IndexError):
+        return None
+
+
+def _read_next_log_feature(run_dir: Path, alert_idx: int) -> list[float] | None:
+    """Read the Nth feature vector from snort_stdout.log (0-indexed, matching alert_csv order).
+
+    Retries briefly since Snort may still be writing when first alert arrives.
+    """
+    import time
+    log_path = run_dir / "xgboost" / "snort_stdout.log"
+    for attempt in range(10):
+        if not log_path.exists():
+            time.sleep(0.2)
+            continue
+        try:
+            count = 0
+            with open(log_path) as f:
+                for line in f:
+                    fv = _parse_log_features(line)
+                    if fv is not None:
+                        if count == alert_idx:
+                            return fv
+                        count += 1
+            # Entry not yet written — wait briefly and retry
+            if count <= alert_idx:
+                time.sleep(0.2)
+                continue
+        except Exception as exc:
+            logger.warning("log feature read error (idx=%d): %s", alert_idx, exc)
+            return None
+    return None
+
+
 # ── Alert ingestion ───────────────────────────────────────────────────────────
 
 async def ingest_alert(alert: Alert) -> None:
+    global _xgb_alert_seq, _xgb_log_features
+
     _gt_loader.ensure_loaded()
     label = _gt_loader.lookup(alert.src_ip, alert.src_port, alert.dst_ip, alert.dst_port, alert.proto.value)
     alert.ground_truth = label
+
+    # IF + SHAP enrichment for XGBoost alerts only
+    if alert.engine == Engine.xgboost and _current_run_dir is not None:
+        fv = await asyncio.to_thread(_read_next_log_feature, _current_run_dir, _xgb_alert_seq)
+        if fv is not None:
+            alert.raw_features = fv
+            if _IF_AVAILABLE:
+                try:
+                    result = await asyncio.to_thread(_if_score, fv)
+                    alert.if_score = result["if_score"]
+                    alert.if_label = result["label"]
+                except Exception as exc:
+                    logger.warning("IF score error (alert %d): %s", _xgb_alert_seq, exc)
+        else:
+            logger.warning("XGB alert #%d: no feature vector found in snort_stdout.log", _xgb_alert_seq)
+        _xgb_alert_seq += 1
 
     _history.append(alert)
     if len(_history) > _HISTORY_MAX:
@@ -182,15 +277,19 @@ async def ingest_alert(alert: Alert) -> None:
     c["unique_src"].add(alert.src_ip)
     c["flows"] += 1
 
-    await manager.broadcast(WsAlertMessage(engine=alert.engine, data=alert).model_dump_json())
+    # Exclude raw_features from WS broadcast (internal only, used by /api/explain)
+    alert_for_ws = alert.model_copy(update={"raw_features": None})
+    await manager.broadcast(WsAlertMessage(engine=alert.engine, data=alert_for_ws).model_dump_json())
 
 
 def _start_tailers(run_dir: str, run_id: str) -> None:
     """Create and register two AlertTailer tasks for a run directory."""
-    global _tailer_tasks, _current_run_dir, _active_run_id
+    global _tailer_tasks, _current_run_dir, _active_run_id, _xgb_alert_seq, _xgb_log_features
     _cancel_tailers()
     _current_run_dir = Path(run_dir)
     _active_run_id = run_id
+    _xgb_alert_seq = 0
+    _xgb_log_features = []
 
     for engine, subdir in [(Engine.xgboost, "xgboost"), (Engine.community, "community")]:
         path = Path(run_dir) / subdir / "alert_csv.txt"
@@ -248,13 +347,15 @@ async def _status_broadcaster() -> None:
 
 
 async def _force_evaluation() -> None:
-    """Stop processes, cancel tailers, compute and broadcast evaluation."""
+    """Stop processes, drain tailers, compute and broadcast evaluation."""
     global _active_run_id
     try:
         await runner.stop()
     except Exception as exc:
         logger.warning("runner.stop() error (ignored): %s", exc)
-    await asyncio.sleep(1.0)
+    # Give tailers time to drain remaining lines — IF enrichment adds ~0.2s per alert
+    # 27 alerts × 0.2s retry = 5.4s worst case; use 8s to be safe
+    await asyncio.sleep(8.0)
     _cancel_tailers()
     if _current_run_dir is not None:
         await _compute_and_broadcast_evaluation(_current_run_dir)
@@ -314,7 +415,7 @@ async def config() -> dict[str, Any]:
 
 @app.get("/api/history")
 async def history() -> list[Alert]:
-    return list(_history)
+    return [a.model_copy(update={"raw_features": None}) for a in _history]
 
 
 @app.post("/api/replay/start", response_model=ReplayStartResponse)
@@ -354,6 +455,24 @@ async def replay_start(body: ReplayRequest) -> ReplayStartResponse:
 
     logger.info("replay/start: pcap=%s run_id=%s status=%s", body.pcap, state.run_id, state.status)
     return ReplayStartResponse(run_id=state.run_id)
+
+
+@app.get("/api/explain/{alert_id}")
+async def explain_alert(alert_id: str) -> list[dict]:
+    alert = next((a for a in _history if a.id == alert_id), None)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found in history")
+    if alert.engine != Engine.xgboost:
+        raise HTTPException(status_code=400, detail="SHAP explain only available for XGBoost alerts")
+    if alert.raw_features is None:
+        raise HTTPException(status_code=400, detail="Feature vector not available for this alert")
+    try:
+        from shap_explain_alert import explain as _shap_explain
+        result = await asyncio.to_thread(_shap_explain, alert.raw_features)
+        return result
+    except Exception as exc:
+        logger.error("SHAP explain error (alert_id=%s): %s", alert_id, exc)
+        raise HTTPException(status_code=500, detail=f"SHAP error: {exc}")
 
 
 @app.post("/api/replay/stop")
