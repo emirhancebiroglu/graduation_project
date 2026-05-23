@@ -1,1 +1,3 @@
-alert ip any any -> any any ( msg:"XGBoost anomaly detected"; gid:301; sid:1; rev:1; classtype:misc-activity; )
+alert ip any any -> any any ( msg:"DoS attack detected (XGBoost)"; gid:301; sid:1; rev:1; classtype:denial-of-service; )
+alert ip any any -> any any ( msg:"DoS volumetric/SYN flood detected (XGBoost)"; gid:301; sid:2; rev:1; classtype:denial-of-service; )
+alert ip any any -> any any ( msg:"DoS slow-rate attack detected (XGBoost)"; gid:301; sid:3; rev:1; classtype:denial-of-service; )

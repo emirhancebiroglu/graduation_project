@@ -40,6 +40,9 @@ class Alert(BaseModel):
     msg: str
     score: float | None = None       # xgboost only, 0..1
     ground_truth: str | None = None   # "attack" | "benign" | None
+    if_score: float | None = None    # IsolationForest anomaly score (more negative = more anomalous)
+    if_label: str | None = None      # "anomaly_candidate" | "known_pattern" | None
+    raw_features: list[float] | None = None  # 15 raw feature values for SHAP explain (v3b schema, not sent to frontend)
 
 
 # ── Metrics ──────────────────────────────────────────────────────────────────

@@ -4,8 +4,10 @@ import type { WsMessage, Alert, EvaluationResult } from "./types";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000/ws";
 const MAX_RECENT_ALERTS = 20;
+const MAX_FEED_ALERTS = 500;
 
 export type ReplayPhase = "idle" | "running" | "evaluating" | "complete";
+export type EngineMetrics = { total: number; alertsPerSec: number };
 
 export type IdsStreamState = {
   connected: boolean;
@@ -16,6 +18,8 @@ export type IdsStreamState = {
   replayPhase: ReplayPhase;
   evaluation: EvaluationResult | null;
   recentAlerts: Alert[];
+  alerts: Alert[];
+  engineAlerts: Record<"xgboost" | "community", Alert[]>;
 };
 
 export function useIdsStream(): IdsStreamState {
@@ -27,11 +31,15 @@ export function useIdsStream(): IdsStreamState {
   const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
   const [pcapProgressVisible, setPcapProgressVisible] = useState(false);
   const [recentAlerts, setRecentAlerts] = useState<Alert[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [engineAlerts, setEngineAlerts] = useState<Record<"xgboost" | "community", Alert[]>>({ xgboost: [], community: [] });
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevRunning = useRef(false);
   const recentAlertsRef = useRef<Alert[]>([]);
+  const alertsRef = useRef<Alert[]>([]);
+  const engineAlertsRef = useRef<Record<"xgboost" | "community", Alert[]>>({ xgboost: [], community: [] });
 
   const handleStatus = useCallback((running: boolean, progress: number, err: string | null | undefined) => {
     setSnortRunning(running);
@@ -44,6 +52,10 @@ export function useIdsStream(): IdsStreamState {
       setEvaluation(null);
       recentAlertsRef.current = [];
       setRecentAlerts([]);
+      alertsRef.current = [];
+      setAlerts([]);
+      engineAlertsRef.current = { xgboost: [], community: [] };
+      setEngineAlerts({ xgboost: [], community: [] });
     } else if (!running && prevRunning.current) {
       setPcapProgressVisible(false);
     }
@@ -57,6 +69,7 @@ export function useIdsStream(): IdsStreamState {
     setPcapProgressVisible(false);
     recentAlertsRef.current = [];
     setRecentAlerts([]);
+    // keep alerts/engineAlerts for review after replay completes
   }, []);
 
   const connect = useCallback(() => {
@@ -86,13 +99,28 @@ export function useIdsStream(): IdsStreamState {
             );
           } else if (msg.type === "evaluation") {
             handleEvaluation(msg.data);
-          } else if (msg.type === "alert" && msg.engine === "xgboost") {
+          } else if (msg.type === "alert") {
             const alert = msg.data as Alert;
-            recentAlertsRef.current = [
-              ...recentAlertsRef.current,
-              alert,
-            ].slice(-MAX_RECENT_ALERTS);
-            setRecentAlerts([...recentAlertsRef.current]);
+            const eng = msg.engine as "xgboost" | "community";
+
+            // Feed (all engines, newest-first, capped)
+            alertsRef.current = [alert, ...alertsRef.current].slice(0, MAX_FEED_ALERTS);
+            setAlerts([...alertsRef.current]);
+
+            engineAlertsRef.current = {
+              ...engineAlertsRef.current,
+              [eng]: [alert, ...engineAlertsRef.current[eng]].slice(0, MAX_FEED_ALERTS),
+            };
+            setEngineAlerts({ ...engineAlertsRef.current });
+
+            // Recent alerts for ImpactSummary terminal (XGB only)
+            if (eng === "xgboost") {
+              recentAlertsRef.current = [
+                ...recentAlertsRef.current,
+                alert,
+              ].slice(-MAX_RECENT_ALERTS);
+              setRecentAlerts([...recentAlertsRef.current]);
+            }
           }
         } catch (e) {
           console.error("Failed to parse WS message:", e);
@@ -127,5 +155,7 @@ export function useIdsStream(): IdsStreamState {
     replayPhase,
     evaluation,
     recentAlerts,
+    alerts,
+    engineAlerts,
   };
 }

@@ -1,1 +1,1 @@
-alert tcp (gid:306; sid:1)
+alert ( gid:306; sid:1; msg:"Bot client detection"; classtype:unknown; )

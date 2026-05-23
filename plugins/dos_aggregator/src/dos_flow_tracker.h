@@ -64,7 +64,9 @@ struct DasAggProfile {
     }
 
     static void preprocess(double* f, const DasAggScalerParams& p) {
-        for (unsigned i = 0; i < AGG_FEATURE_COUNT; i++) f[i] = std::log1p(f[i]);
+        // log1p only on cols matching Python train: syn_count(0), dst_ports(1), dst_ips(2), rate(6)
+        static constexpr unsigned LOG1P_COLS[] = {0, 1, 2, 6};
+        for (unsigned i : LOG1P_COLS) f[i] = std::log1p(f[i]);
         for (unsigned i = 0; i < AGG_FEATURE_COUNT; i++)
             f[i] = (p.iqr[i] != 0.0) ? (f[i] - p.median[i]) / p.iqr[i] : 0.0;
     }

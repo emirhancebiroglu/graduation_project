@@ -1,0 +1,9 @@
+venv/
+.claude/
+.git/
+
+demo-app/web/node_modules
+demo-app/web/.next
+demo-app/web/public
+demo-app/api/.venv
+demo-app/api/__pycache__

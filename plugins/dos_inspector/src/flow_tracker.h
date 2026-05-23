@@ -14,6 +14,7 @@
 #include "protocols/tcp.h"
 
 // Feature vektörü indeksleri (Python eğitim sırasıyla aynı)
+// v3b: swin/dwin kaldırıldı (CIC-UNSW scale mismatch: CIC~29000 vs UNSW~255)
 enum DosFeatureIndex : unsigned {
     DOS_FI_DUR = 0,
     DOS_FI_SPKTS,
@@ -22,11 +23,16 @@ enum DosFeatureIndex : unsigned {
     DOS_FI_DBYTES,
     DOS_FI_SMEANSZ,
     DOS_FI_DMEANSZ,
-    DOS_FI_SWIN,
-    DOS_FI_DWIN,
-    DOS_FI_SINTPKT,
-    DOS_FI_DINTPKT,
-    DOS_FI_COUNT  // = 11
+    DOS_FI_SINTPKT,    // 7 (swin/dwin removed)
+    DOS_FI_DINTPKT,    // 8
+    // v3b features
+    DOS_FI_FWD_PKT_MEAN,  // 9
+    DOS_FI_BWD_PKT_MEAN,  // 10
+    DOS_FI_FIN_CNT,       // 11: FIN flag count
+    DOS_FI_ACK_CNT,       // 12: ACK flag count
+    DOS_FI_SYN_CNT,       // 13: SYN flag count
+    DOS_FI_BWD_IAT,       // 14: mean bwd inter-arrival time (ms)
+    DOS_FI_COUNT  // = 15
 };
 
 struct DosScalerParams {
@@ -34,10 +40,15 @@ struct DosScalerParams {
     double iqr[DOS_FI_COUNT];
 };
 
+// log1p_indices from dos_fpr_opt_v3b_scaler.json: [0,1,2,3,4,7,8,9,10,11,12,13,14]
+// (all except none — all 15 features get log1p based on the scaler)
 inline bool dos_needs_log1p(unsigned idx) {
-    return idx == DOS_FI_DUR    || idx == DOS_FI_SPKTS  || idx == DOS_FI_DPKTS  ||
-           idx == DOS_FI_SBYTES || idx == DOS_FI_DBYTES || idx == DOS_FI_SINTPKT ||
-           idx == DOS_FI_DINTPKT;
+    return idx == DOS_FI_DUR         || idx == DOS_FI_SPKTS        || idx == DOS_FI_DPKTS      ||
+           idx == DOS_FI_SBYTES      || idx == DOS_FI_DBYTES        ||
+           idx == DOS_FI_SINTPKT     || idx == DOS_FI_DINTPKT       ||
+           idx == DOS_FI_FWD_PKT_MEAN || idx == DOS_FI_BWD_PKT_MEAN ||
+           idx == DOS_FI_FIN_CNT    || idx == DOS_FI_ACK_CNT        || idx == DOS_FI_SYN_CNT ||
+           idx == DOS_FI_BWD_IAT;
 }
 
 // ---------------------------------------------------------------
@@ -64,7 +75,7 @@ public:
         inference_done = false;
         flow_state = IDLE;
         stage1_score = 0.0f;
-        rst_count = 0; fin_count = 0; urg_count = 0; syn_count = 0;
+        rst_count = 0; fin_count = 0; urg_count = 0; syn_count = 0; ack_count = 0;
     }
 
     void update(bool is_from_client, uint32_t payload_len,
@@ -92,21 +103,27 @@ public:
         if (tcp_flags & TH_FIN) fin_count++;
         if (tcp_flags & TH_URG) urg_count++;
         if (tcp_flags & TH_SYN) syn_count++;
+        if (tcp_flags & TH_ACK) ack_count++;
     }
 
     void compute_features(double* raw) const {
-        raw[DOS_FI_DUR]     = last_pkt_ts - first_pkt_ts;
-        raw[DOS_FI_SPKTS]   = static_cast<double>(spkts);
-        raw[DOS_FI_DPKTS]   = static_cast<double>(dpkts);
-        raw[DOS_FI_SBYTES]  = static_cast<double>(sbytes);
-        raw[DOS_FI_DBYTES]  = static_cast<double>(dbytes);
-        raw[DOS_FI_SMEANSZ] = (spkts > 0) ? static_cast<double>(sbytes) / spkts : 0.0;
-        raw[DOS_FI_DMEANSZ] = (dpkts > 0) ? static_cast<double>(dbytes) / dpkts : 0.0;
-        raw[DOS_FI_SWIN]    = (swin >= 0) ? static_cast<double>(swin) : 0.0;
-        raw[DOS_FI_DWIN]    = (dwin >= 0) ? static_cast<double>(dwin) : 0.0;
-        raw[DOS_FI_SINTPKT] = (spkts > 1) ? (src_iat_sum / (spkts - 1)) * 1000.0 : 0.0;
-        raw[DOS_FI_DINTPKT] = (dpkts > 1) ? (dst_iat_sum / (dpkts - 1)) * 1000.0 : 0.0;
-        // Flag counts (rst/fin/urg/syn) tracked internally for future v2 model
+        raw[DOS_FI_DUR]          = last_pkt_ts - first_pkt_ts;
+        raw[DOS_FI_SPKTS]        = static_cast<double>(spkts);
+        raw[DOS_FI_DPKTS]        = static_cast<double>(dpkts);
+        raw[DOS_FI_SBYTES]       = static_cast<double>(sbytes);
+        raw[DOS_FI_DBYTES]       = static_cast<double>(dbytes);
+        raw[DOS_FI_SMEANSZ]      = (spkts > 0) ? static_cast<double>(sbytes) / spkts : 0.0;
+        raw[DOS_FI_DMEANSZ]      = (dpkts > 0) ? static_cast<double>(dbytes) / dpkts : 0.0;
+        // swin/dwin removed (v3b: CIC-UNSW scale mismatch)
+        raw[DOS_FI_SINTPKT]      = (spkts > 1) ? (src_iat_sum / (spkts - 1)) * 1000.0 : 0.0;
+        raw[DOS_FI_DINTPKT]      = (dpkts > 1) ? (dst_iat_sum / (dpkts - 1)) * 1000.0 : 0.0;
+        // v3b features
+        raw[DOS_FI_FWD_PKT_MEAN] = raw[DOS_FI_SMEANSZ];
+        raw[DOS_FI_BWD_PKT_MEAN] = raw[DOS_FI_DMEANSZ];
+        raw[DOS_FI_FIN_CNT]      = static_cast<double>(fin_count);
+        raw[DOS_FI_ACK_CNT]      = static_cast<double>(ack_count);
+        raw[DOS_FI_SYN_CNT]      = static_cast<double>(syn_count);
+        raw[DOS_FI_BWD_IAT]      = (dpkts > 1) ? (dst_iat_sum / (dpkts - 1)) * 1000.0 : 0.0;
     }
 
     // log1p + RobustScaler — clamp YOK (XGBoost için kasıtlı)
@@ -134,6 +151,7 @@ public:
     uint32_t get_fin_count() const     { return fin_count; }
     uint32_t get_urg_count() const     { return urg_count; }
     uint32_t get_syn_count() const     { return syn_count; }
+    uint32_t get_ack_count() const     { return ack_count; }
 
 private:
     double   first_pkt_ts, last_pkt_ts;
@@ -150,6 +168,7 @@ private:
     uint32_t  fin_count;
     uint32_t  urg_count;
     uint32_t  syn_count;
+    uint32_t  ack_count;
 };
 
 #endif // DOS_INSPECTOR_FLOW_TRACKER_H

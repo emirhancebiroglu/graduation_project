@@ -127,16 +127,23 @@ ips =
 -- 7. configure outputs
 alert_csv = { file = true, }
 
+event_queue =
+{
+    max_queue = 1024,
+    log       = 1024,
+    order_events = 'priority',
+}
+
 -- 8. configure tweaks
 if ( tweaks ~= nil ) then
     include(tweaks .. '.lua')
 end
 
 -- =============================================
--- DoS Inspector (bitirme projesi)
+-- DoS Inspector (bitirme projesi) — v3b (15 features, CIC+UNSW mixed)
 dos_inspector =
 {
     threshold   = 0.90,
-    max_packets = 2,
-    model_path  = "/home/emirhan/bitirme/models/dos_model.json",
+    max_packets = 8,
+    model_path  = "/home/emirhan/bitirme/models/dos_fpr_opt_v3b.json",
 }

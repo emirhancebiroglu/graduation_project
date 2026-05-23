@@ -1,4 +1,4 @@
-// portscan_inspector.cc — SYN ML (7-feature) + NULL/XMAS heuristic
+﻿// portscan_inspector.cc â€” SYN ML (7-feature) + NULL/XMAS heuristic
 // Bitirme Projesi
 // GID:302, SID:1
 
@@ -28,8 +28,8 @@ static inline uint32_t gsip(snort::Packet* p) {
 
 // AGG_SCALER_PARAMS_BEGIN
 PsiAggScalerParams g_scaler = {
-    { 1.3862943611, 0.6931471806, 0.6931471806, 0.0, 1.0, 0.103448, 0.0487901642 },
-    { 2.3978952728, 1.3862943611, 1.3862943611, 0.981703, 18.0, 0.352941, 0.1541509655 }
+    { 2.0794415417, 1.0986122887, 1.0986122887, 0.5940327422, 1.7917594692, 0.2876820725, 0.1103480572 },
+    { 2.5649493575, 0.6931471806, 1.0986122887, 0.8632909694, 7.7916225259, 0.3053816496, 0.5663954749 }
 };
 // AGG_SCALER_PARAMS_END
 
@@ -42,6 +42,7 @@ static const snort::Parameter psi_params[] = {
       "/home/emirhan/bitirme/models/portscan_aggregator_model.json", "model path" },
     { "window_sec", snort::Parameter::PT_INT,   "1:300",   "60",   "window seconds" },
     { "min_packets", snort::Parameter::PT_INT,   "2:10000", "3",    "min SYNs" },
+    { "min_dst_ports", snort::Parameter::PT_INT, "1:1000",  "30",   "min unique dst ports before ML" },
     { nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr }
 };
 
@@ -54,10 +55,11 @@ public:
         else if (v.is("model_path")) mp = v.get_string();
         else if (v.is("window_sec")) ws = v.get_int64();
         else if (v.is("min_packets"))   mn = v.get_int64();
+        else if (v.is("min_dst_ports")) mdp = v.get_int64();
         else return false; return true;
     }
     Usage get_usage() const override { return INSPECT; }
-    double thr = 0.50; std::string mp; uint32_t ws = 60, mn = 3;
+    double thr = 0.50; std::string mp; uint32_t ws = 60, mn = 3, mdp = 30;
 };
 
 class Xgb {
@@ -84,7 +86,7 @@ private:
 
 class Insp : public snort::Inspector {
 public:
-    Insp(Mod* m) { thr=m->thr; mp=m->mp; ws=m->ws; mn=m->mn; }
+    Insp(Mod* m) { thr=m->thr; mp=m->mp; ws=m->ws; mn=m->mn; mdp=m->mdp; }
 
     bool configure(snort::SnortConfig*) override {
         if (!xgb.load(mp)) snort::ErrorMessage("[portscan] Model load failed.\n");
@@ -148,12 +150,14 @@ public:
     }
 
 private:
-    double thr; std::string mp; uint32_t ws, mn;
+    double thr; std::string mp; uint32_t ws, mn, mdp;
     Xgb xgb;
     std::unordered_map<uint32_t, PsiAggProfile> profs;
     static std::atomic<uint64_t> inf, alert;
 
     void infer(PsiAggProfile& pr, double now) {
+        // Skip ML if too few unique dst ports (avoids FP on normal heavy traffic)
+        if (pr.syn_dst_ports.size() < mdp) { pr.inference_done = true; return; }
         double raw[7], proc[7];
         pr.compute_features(raw, ws);
         memcpy(proc, raw, sizeof(raw));

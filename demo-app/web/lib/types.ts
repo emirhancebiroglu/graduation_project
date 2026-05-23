@@ -14,6 +14,15 @@ export type Alert = {
   msg: string;
   score?: number;
   ground_truth?: string | null;
+  if_score?: number | null;
+  if_label?: string | null;
+};
+
+export type ShapContribution = {
+  feature: string;
+  raw_value: number;
+  shap_value: number;
+  direction: "attack" | "benign";
 };
 
 export type Metrics = {

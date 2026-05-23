@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Read combined C++ dump files, label attacker + hard negs, train XGBoost."""
+"""Read combined C++ dump files, label attacker + hard negs, train XGBoost.
+
+Labeling fix: 172.16.0.1 performs different attacks on different days.
+Only Wednesday+Friday are DoS flood days — label those as positive.
+Tuesday (FTP brute force) and Thursday (web scan) are hard negatives:
+their SYN rate is high enough to fool the model but they are NOT DoS floods.
+"""
 import numpy as np, xgboost as xgb, json, os, glob
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import RobustScaler
@@ -8,35 +14,51 @@ DUMP_DIR = '/home/emirhan/bitirme/results/dos_aggregator'
 MODEL_PATH = '/home/emirhan/bitirme/models/dos_aggregator_model.json'
 
 SCANNER_IP = 0xAC100001
+# Days where 172.16.0.1 actually performs DoS SYN flooding
+DOS_ATTACK_DAYS = {'Wednesday', 'Friday'}
 HARD_NEG_IPS = [
     0xC0A80A08, 0xC0A80A09, 0xC0A80A0C, 0xC0A80A0F,
     0xC0A80A10, 0xC0A80A11,
+    0xC0A80A19,  # 192.168.10.25 — Thursday single FP (HTTPS burst)
 ]
 
 all_data = []
+all_days = []
 for fname in sorted(glob.glob(os.path.join(DUMP_DIR, 'dos_train_data_*.txt'))):
     day = os.path.basename(fname).replace('dos_train_data_', '').replace('.txt', '')
     data = np.loadtxt(fname, comments='#')
     print(f'{day}: {len(data)} windows')
     all_data.append(data)
+    all_days.extend([day] * len(data))
 data = np.vstack(all_data)
+days_arr = np.array(all_days)
 print(f'Total: {len(data)} windows')
 
 X_raw = data[:, 1:8].astype(np.float64)
 src_ips = data[:, 9].astype(np.uint32)
 
+# Positive: attacker IP on DoS attack days only
+# Tuesday (brute force) + Thursday (web scan) attacker windows → hard negative (weight=5)
 y = np.zeros(len(data), dtype=np.int32)
-y[src_ips == SCANNER_IP] = 1
+for i, (ip, day) in enumerate(zip(src_ips, days_arr)):
+    if ip == SCANNER_IP and day in DOS_ATTACK_DAYS:
+        y[i] = 1
+
 sample_weight = np.ones(len(data))
 for hip in HARD_NEG_IPS:
     sample_weight[src_ips == hip] = 3.0
+# Attacker on non-DoS days: hard negative (teach model to distinguish brute force / scan from flood)
+non_dos_attacker = (src_ips == SCANNER_IP) & ~np.isin(days_arr, list(DOS_ATTACK_DAYS))
+sample_weight[non_dos_attacker] = 5.0
 
 pos = y.sum()
-hard_neg = ((sample_weight == 3.0) & (y == 0)).sum()
+hard_neg_ip = ((sample_weight == 3.0) & (y == 0)).sum()
+hard_neg_att = non_dos_attacker.sum()
 easy_neg = ((sample_weight == 1.0) & (y == 0)).sum()
-print(f'Positives (attacker):    {pos}')
-print(f'Hard negatives (FP IPs): {hard_neg}')
-print(f'Easy negatives:          {easy_neg}')
+print(f'Positives (DoS flood days):          {pos}')
+print(f'Hard negatives (attacker non-DoS):   {hard_neg_att}')
+print(f'Hard negatives (FP IPs):             {hard_neg_ip}')
+print(f'Easy negatives:                      {easy_neg}')
 
 log1p_cols = [0, 1, 2, 6]
 X = X_raw.copy()

@@ -1,10 +1,15 @@
 "use client";
-import type { IdsStreamState } from "@/lib/use-ids-stream";
+import type { EvaluationResult } from "@/lib/types";
 
-type Props = Pick<
-  IdsStreamState,
-  "metrics" | "snortRunning" | "pcapProgress" | "replayStartedAt" | "firstAlertAt" | "evaluation"
->;
+type EngineMetrics = { total: number; alertsPerSec: number };
+type Props = {
+  metrics: { xgboost: EngineMetrics; community: EngineMetrics };
+  snortRunning: boolean;
+  pcapProgress: number;
+  replayStartedAt: number | null;
+  firstAlertAt: number | null;
+  evaluation: EvaluationResult | null;
+};
 
 function fmt(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;

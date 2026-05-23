@@ -1,7 +1,7 @@
----------------------------------------------------------------------------
--- snort_portscan.lua — PortScan Inspector Config
--- Bitirme Projesi: IDS Performans Karşılaştırma
--- AUTO-UPDATED by training pipeline — threshold and model_path change each iter
+﻿---------------------------------------------------------------------------
+-- snort_portscan.lua â€” PortScan Inspector Config
+-- Bitirme Projesi: IDS Performans KarÅŸÄ±laÅŸtÄ±rma
+-- AUTO-UPDATED by training pipeline â€” threshold and model_path change each iter
 ---------------------------------------------------------------------------
 
 HOME_NET = 'any'
@@ -127,10 +127,11 @@ end
 -- =============================================
 portscan_inspector =
 {
-    threshold    = 0.50,
-    model_path   = "/home/emirhan/bitirme/models/portscan_aggregator_model.json",
+    threshold    = 0.90,
+    model_path   = "/home/emirhan/bitirme/models/portscan_aggregator_model_v4d.json",
     window_sec   = 60,
-    min_packets  = 3,
+    min_packets  = 5,
+    min_dst_ports = 30,
 }
 
 -- Snort built-in portscan inspector (distributed scans, UDP sweeps, ICMP)

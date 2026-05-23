@@ -247,7 +247,7 @@ class SnortRunner:
             "-r", pcap_path,
             "-A", "alert_csv",
             "-l", xgb_dir,
-            "--warn-all", "-q",
+            "--warn-all",
         ]
         cmd_community = [
             "snort",

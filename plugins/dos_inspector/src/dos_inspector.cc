@@ -10,6 +10,8 @@
 #include <atomic>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
+#include <mutex>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -30,7 +32,7 @@
 // Sabitler
 // ---------------------------------------------------------------
 static const char* s_name = "dos_inspector";
-static const char* s_help = "per-flow DoS detection via XGBoost (11 features)";
+static const char* s_help = "per-flow DoS detection via XGBoost (15 features, v3b)";
 
 static const uint32_t DOS_GID           = 301;
 static const uint32_t DOS_SID_GENERIC   = 1;
@@ -40,11 +42,19 @@ static const uint32_t DOS_SID_SLOWRATE  = 3;
 unsigned DosFlowData::inspector_id = 0;
 
 // ---------------------------------------------------------------
-// RobustScaler parametreleri
+// RobustScaler parametreleri (15 features — v3b)
+// Sıra: dur, spkts, dpkts, sbytes, dbytes, smeansz, dmeansz,
+//       sintpkt, dintpkt,
+//       fwd_pkt_mean, bwd_pkt_mean, fin_cnt, ack_cnt, syn_cnt, bwd_iat
+// Kaynak: train/train_dos_fpr_opt_v3b.py — CIC+UNSW combined benign scaler
 // ---------------------------------------------------------------
 DosScalerParams g_scaler_params = {
-    { 0.0157, 2.5649, 2.5649, 7.2937, 7.5071, 73.0, 89.0, 255.0, 255.0, 0.3841, 0.3472 },
-    { 0.1935, 2.7081, 2.6626, 2.7623, 4.4214, 72.0, 496.0, 255.0, 255.0, 2.1158, 1.9696 }
+    // median[15]
+    { 0.068405, 1.791759, 1.609438, 6.070738, 7.520235, 67.000000, 174.000000,
+      2.646551, 2.324991, 4.219508, 5.164786, 0.000000, 0.000000, 0.000000, 2.324991 },
+    // iqr[15]
+    { 0.219837, 1.223775, 1.558145, 2.352108, 3.130624, 64.800003, 618.000000,
+      3.353946, 3.112733, 0.751934, 2.200156, 1.000000, 2.079442, 1.098612, 3.112733 }
 };
 
 // ---------------------------------------------------------------
@@ -112,11 +122,13 @@ static const snort::RuleMap dos_rules[] = {
 static const snort::Parameter dos_params[] = {
     { "threshold",   snort::Parameter::PT_REAL,   "0.0:1.0", "0.5",
       "DoS anomaly threshold (0.0-1.0)" },
-    { "max_packets", snort::Parameter::PT_INT,    "2:10000", "100",
+    { "max_packets", snort::Parameter::PT_INT,    "1:10000", "100",
       "max packets per flow before triggering inference" },
     { "model_path",  snort::Parameter::PT_STRING, nullptr,
-      "/home/emirhan/bitirme/models/dos_model.json",
+      "/home/emirhan/bitirme/models/dos_fpr_opt_v3b.json",
       "path to stage-1 XGBoost JSON model file" },
+    { "dump_path",   snort::Parameter::PT_STRING, nullptr, "none",
+      "path for feature dump CSV (training data); set to 'none' to disable" },
     { nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr }
 };
 
@@ -130,6 +142,7 @@ public:
         if      (val.is("threshold"))     threshold   = val.get_real();
         else if (val.is("max_packets"))   max_packets = static_cast<uint32_t>(val.get_int64());
         else if (val.is("model_path"))    model_path  = val.get_string();
+        else if (val.is("dump_path"))     dump_path   = val.get_string();
         else return false;
         return true;
     }
@@ -138,7 +151,8 @@ public:
 
     double      threshold     = 0.5;
     uint32_t    max_packets   = 100;
-    std::string model_path    = "/home/emirhan/bitirme/models/dos_model.json";
+    std::string model_path    = "/home/emirhan/bitirme/models/dos_fpr_opt_v3b.json";
+    std::string dump_path     = "none";
 };
 
 // ---------------------------------------------------------------
@@ -206,6 +220,7 @@ public:
         threshold     = mod->threshold;
         max_packets   = mod->max_packets;
         model_path    = mod->model_path;
+        dump_path     = mod->dump_path;
     }
 
     void show(const snort::SnortConfig*) const override {
@@ -222,6 +237,21 @@ public:
             snort::LogMessage("[dos_inspector] Loaded scaler from JSON\n");
         else
             snort::LogMessage("[dos_inspector] Using hardcoded scaler params\n");
+        if (!dump_path.empty() && dump_path != "none") {
+            dump_file.open(dump_path, std::ios::out | std::ios::trunc);
+            if (dump_file.is_open()) {
+                // Header: 15 raw features + score (v3b: swin/dwin removed)
+                dump_file << "src_ip,src_port,dst_ip,dst_port,proto,"
+                             "dur,spkts,dpkts,sbytes,dbytes,smeansz,dmeansz,"
+                             "sintpkt,dintpkt,"
+                             "fwd_pkt_mean,bwd_pkt_mean,fin_cnt,ack_cnt,syn_cnt,bwd_iat,"
+                             "score\n";
+                snort::LogMessage("[dos_inspector] Dump CSV: %s\n", dump_path.c_str());
+            } else {
+                snort::ErrorMessage("[dos_inspector] Cannot open dump file: %s\n",
+                    dump_path.c_str());
+            }
+        }
         return true;
     }
 
@@ -291,12 +321,12 @@ private:
     double       threshold;
     uint32_t     max_packets;
     std::string  model_path;
+    std::string  dump_path;
+    std::ofstream dump_file;
+    std::mutex   dump_mutex;
     XGBoostEngine engine;
 
     static const float STAGE1_HIGH_CONF;
-
-    static std::atomic<uint64_t> cnt_total;
-    static std::atomic<uint64_t> cnt_above;
 
     std::unordered_map<uint32_t, SynTracker> syn_trackers;
     static uint32_t evict_counter;
@@ -341,14 +371,8 @@ private:
         return (dp == 53 || dp == 137 || dp == 389);
     }
 
-    static bool is_rule4_suppressed(double raw[DOS_FI_COUNT]) {
-        double swin    = raw[DOS_FI_SWIN];
-        double sintpkt = raw[DOS_FI_SINTPKT];
-        double spkts   = raw[DOS_FI_SPKTS];
-        if (swin >= 150.0 && swin <= 500.0 && spkts <= 2.0)
-            return true;
-        if (swin >= 150.0 && swin <= 500.0 && sintpkt > 50.0)
-            return true;
+    static bool is_rule4_suppressed(double /*raw*/[DOS_FI_COUNT]) {
+        // swin/dwin removed in v3b — rule4 no longer applicable
         return false;
     }
 
@@ -377,42 +401,63 @@ private:
     void emit_alert(snort::Packet* pkt, DosFlowData* fd,
                     float score, const char* stage, double raw[DOS_FI_COUNT],
                     bool is_stage2) {
-        cnt_total++;
-        if (score > static_cast<float>(threshold)) cnt_above++;
-
-        if (cnt_total % 50000 == 0) {
-            snort::LogMessage("[dos_inspector] total=%lu above_thresh=%lu (%.1f%%)\n",
-                cnt_total.load(), cnt_above.load(),
-                100.0 * cnt_above.load() / cnt_total.load());
-        }
-
-        snort::LogMessage(
-            "[dos_inspector] %s pkts=%u score=%.4f | "
-            "dur=%.4f sp=%.0f dp=%.0f sb=%.0f db=%.0f "
-            "smsz=%.0f dmsz=%.0f sw=%.0f dw=%.0f si=%.4f di=%.4f",
-            stage, fd->get_total_packets(), score,
-            raw[DOS_FI_DUR],    raw[DOS_FI_SPKTS],   raw[DOS_FI_DPKTS],
-            raw[DOS_FI_SBYTES], raw[DOS_FI_DBYTES],  raw[DOS_FI_SMEANSZ],
-            raw[DOS_FI_DMEANSZ],raw[DOS_FI_SWIN],    raw[DOS_FI_DWIN],
-            raw[DOS_FI_SINTPKT],raw[DOS_FI_DINTPKT]);
-
         bool r3 = is_rule3_suppressed(pkt);
         bool r4 = is_rule4_suppressed(raw);
-        uint32_t alert_src = 0;
-        if (pkt->flow && pkt->flow->client_ip.is_ip4())
-            alert_src = ntohl(pkt->flow->client_ip.get_ip4_value());
-        bool syn_ok = (alert_src == 0) ? true : is_attack_syn_rate(alert_src);
 
-        if (score > static_cast<float>(threshold) && !r3 && !r4 && syn_ok) {
-            uint32_t sid = classify_attack_type(raw, score, fd->get_total_packets(), is_stage2);
-            snort::LogMessage(" sid=%u\n", sid);
+        if (score > static_cast<float>(threshold) && !r3 && !r4) {
+            uint32_t alert_src = 0;
+            if (pkt->flow && pkt->flow->client_ip.is_ip4())
+                alert_src = ntohl(pkt->flow->client_ip.get_ip4_value());
+            bool high_syn = (alert_src != 0) && is_attack_syn_rate(alert_src);
+            uint32_t sid;
+            if (high_syn)
+                sid = DOS_SID_VOLUMETRIC;
+            else
+                sid = classify_attack_type(raw, score, fd->get_total_packets(), is_stage2);
             snort::DetectionEngine::queue_event(DOS_GID, sid);
-        } else if (!syn_ok) {
-            auto sti = syn_trackers.find(alert_src);
-            uint32_t rate = (sti != syn_trackers.end()) ? sti->second.max_rate() : 0;
-            snort::LogMessage(" SUPPRESSED(r3=%d r4=%d syn_rate=%u<%u)\n", r3, r4, rate, SYN_RATE_MIN);
-        } else {
-            snort::LogMessage(" SUPPRESSED(r3=%d r4=%d)\n", r3, r4);
+            // Demo SHAP: emit feature log for live explain (parsed by demo-app)
+            snort::LogMessage("[dos_inspector] s1-high pkts=%u score=%.4f | "
+                "dur=%.6f sp=%.0f dp=%.0f sb=%.0f db=%.0f smsz=%.2f dmsz=%.2f "
+                "si=%.4f di=%.4f fwd=%.2f bwd=%.2f fin=%.0f ack=%.0f syn=%.0f biat=%.4f sid=%u\n",
+                fd->get_total_packets(), score,
+                raw[DOS_FI_DUR], raw[DOS_FI_SPKTS], raw[DOS_FI_DPKTS],
+                raw[DOS_FI_SBYTES], raw[DOS_FI_DBYTES],
+                raw[DOS_FI_SMEANSZ], raw[DOS_FI_DMEANSZ],
+                raw[DOS_FI_SINTPKT], raw[DOS_FI_DINTPKT],
+                raw[DOS_FI_FWD_PKT_MEAN], raw[DOS_FI_BWD_PKT_MEAN],
+                raw[DOS_FI_FIN_CNT], raw[DOS_FI_ACK_CNT], raw[DOS_FI_SYN_CNT],
+                raw[DOS_FI_BWD_IAT], sid);
+        }
+
+        // Dump raw features + score if dump_path configured
+        if (dump_file.is_open()) {
+            std::lock_guard<std::mutex> lk(dump_mutex);
+            // Write 5-tuple for label joining
+            uint32_t src_ip = 0, dst_ip = 0;
+            uint16_t src_port = 0, dst_port = 0;
+            uint8_t proto = 0;
+            if (pkt->flow) {
+                if (pkt->flow->client_ip.is_ip4())
+                    src_ip = ntohl(pkt->flow->client_ip.get_ip4_value());
+                if (pkt->flow->server_ip.is_ip4())
+                    dst_ip = ntohl(pkt->flow->server_ip.get_ip4_value());
+                src_port = pkt->flow->client_port;
+                dst_port = pkt->flow->server_port;
+                proto    = static_cast<uint8_t>(pkt->flow->ip_proto);
+            }
+            // IP as dotted-decimal
+            auto ip2s = [](uint32_t ip, char* buf) {
+                snprintf(buf, 16, "%u.%u.%u.%u",
+                    (ip>>24)&0xff, (ip>>16)&0xff, (ip>>8)&0xff, ip&0xff);
+            };
+            char s_ip[16], d_ip[16];
+            ip2s(src_ip, s_ip); ip2s(dst_ip, d_ip);
+            dump_file << s_ip << ',' << src_port << ','
+                      << d_ip << ',' << dst_port << ','
+                      << (int)proto << ',';
+            for (unsigned i = 0; i < DOS_FI_COUNT; i++)
+                dump_file << raw[i] << ',';
+            dump_file << score << '\n';
         }
 
         fd->mark_inference_done();
@@ -432,11 +477,6 @@ private:
 
         if (score >= STAGE1_HIGH_CONF) {
             emit_alert(pkt, fd, score, "s1-high", raw, false);
-        } else if (score >= static_cast<float>(threshold)) {
-            fd->set_state(DosFlowData::WATCH);
-            snort::LogMessage(
-                "[dos_inspector] s1-watch pkts=%u score=%.4f deferring\n",
-                fd->get_total_packets(), score);
         } else {
             fd->mark_inference_done();
             fd->set_state(DosFlowData::DONE);
@@ -456,10 +496,8 @@ private:
     }
 };
 
-std::atomic<uint64_t> DosInspector::cnt_total{0};
-std::atomic<uint64_t> DosInspector::cnt_above{0};
 uint32_t DosInspector::evict_counter{0};
-const float DosInspector::STAGE1_HIGH_CONF = 0.95f;
+const float DosInspector::STAGE1_HIGH_CONF = 0.90f;  // v2: match threshold, disable deferral
 
 // ---------------------------------------------------------------
 // Plugin API
