@@ -31,8 +31,10 @@ static inline uint32_t gdip(snort::Packet* p) {
 
 // AGG_SCALER_PARAMS_BEGIN
 BfcScalerParams g_scaler = {
-    { 3.044522, 1.791759, 1.098612, 0.105360, 0.559616, 0.287682, 1.106009 },
-    { 1.836550, 1.945910, 0.287682, 0.202415, 0.180537, 0.567857, 0.556752 }
+    { 1.609438, 1.098612, 1.098612, 0.287682, 0.559616, 0.032790, 0.693145,
+      0.510826, 0.000000, 7.748891 },
+    { 1.011601, 0.693147, 0.405465, 0.328504, 0.182321, 0.055350, 0.322198,
+      0.162119, 0.336472, 1.945105 }
 };
 // AGG_SCALER_PARAMS_END
 
@@ -45,6 +47,8 @@ static const snort::Parameter bfc_params[] = {
       "/home/emirhan/bitirme/models/bruteforce_model.json", "model path" },
     { "window_sec", snort::Parameter::PT_INT,   "1:600",   "60",   "window seconds" },
     { "min_syns",   snort::Parameter::PT_INT,   "2:10000", "5",    "min outgoing SYNs" },
+    { "suppress_ips", snort::Parameter::PT_STRING, nullptr,
+      "none", "comma-separated IPs to suppress alerts for" },
     { nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr }
 };
 
@@ -57,10 +61,11 @@ public:
         else if (v.is("model_path")) mp = v.get_string();
         else if (v.is("window_sec")) ws = v.get_int64();
         else if (v.is("min_syns"))   mn = v.get_int64();
+        else if (v.is("suppress_ips")) { sp = v.get_string(); if (sp == "none") sp = ""; }
         else return false; return true;
     }
     Usage get_usage() const override { return INSPECT; }
-    double thr = 0.50; std::string mp; uint32_t ws = 60, mn = 5;
+    double thr = 0.50; std::string mp, sp; uint32_t ws = 60, mn = 5;
 };
 
 class Xgb {
@@ -88,7 +93,29 @@ private:
 
 class Insp : public snort::Inspector {
 public:
-    Insp(Mod* m) { thr=m->thr; mp=m->mp; ws=m->ws; mn=m->mn; }
+    Insp(Mod* m) { thr=m->thr; mp=m->mp; ws=m->ws; mn=m->mn; parse_whitelist(m->sp); }
+
+    void parse_whitelist(const std::string& csv) {
+        suppress_set.clear();
+        if (csv.empty()) return;
+        std::string s = csv;
+        size_t pos = 0;
+        while ((pos = s.find(',')) != std::string::npos) {
+            std::string token = s.substr(0, pos);
+            suppress_set.insert(parse_ip(token));
+            s.erase(0, pos + 1);
+        }
+        if (!s.empty()) suppress_set.insert(parse_ip(s));
+        if (!suppress_set.empty())
+            snort::LogMessage("[bfc] Whitelist: %zu IPs\n", suppress_set.size());
+    }
+
+    static uint32_t parse_ip(const std::string& s) {
+        uint32_t a,b,c,d;
+        if (sscanf(s.c_str(), "%u.%u.%u.%u", &a, &b, &c, &d) == 4)
+            return (a<<24)|(b<<16)|(c<<8)|d;
+        return 0;
+    }
 
     bool configure(snort::SnortConfig*) override {
         if (!xgb.load(mp)) snort::ErrorMessage("[bfc] Model load failed.\n");
@@ -104,73 +131,139 @@ public:
         double now = 0;
         if (p->pkth) now = p->pkth->ts.tv_sec + p->pkth->ts.tv_usec / 1e6;
 
-        // Track outgoing TCP SYN-only packets per source IP
-        if (!p->ptrs.tcph || !p->ptrs.tcph->is_syn_only()) return;
-
+        if (!p->ptrs.tcph) return;
+        
         uint32_t src = gsip(p);
         uint32_t dst = gdip(p);
         if (src == 0 || dst == 0) return;
-
         uint16_t dp = p->ptrs.tcph->dst_port();
-
-        auto it = profs.find(src);
-        if (it == profs.end()) {
-            BfcProfile pr; pr.reset(src, now);
-            pr.add_syn(dst, dp, now);
-            profs[src] = pr; return;
+        
+        // Process SYN-only packets for profile tracking
+        if (p->ptrs.tcph->is_syn_only()) {
+            auto it = profs.find(src);
+            if (it == profs.end()) {
+                BfcProfile pr; pr.reset(src, now);
+                pr.add_syn(dst, dp, now);
+                profs[src] = pr;
+            } else {
+                auto& pr = it->second;
+                if (pr.is_window_expired(now, ws)) {
+                    if (!pr.inference_done && pr.syn_count >= mn) infer(pr, now);
+                    pr.reset(src, now);
+                }
+                pr.add_syn(dst, dp, now);
+                
+                if (!pr.inference_done && pr.syn_count >= mn) {
+                    double elapsed = now - pr.window_start_ts;
+                    if (elapsed >= 30.0 || pr.syn_count >= 30)
+                        infer(pr, now);
+                }
+            }
         }
-        auto& pr = it->second;
-
-        if (pr.is_window_expired(now, ws)) {
-            if (!pr.inference_done && pr.syn_count >= mn) infer(pr, now);
-            pr.reset(src, now);
+        
+        // Track incoming SYN-ACK as handshake completion
+        if (p->ptrs.tcph->is_syn_ack()) {
+            auto it = profs.find(dst);
+            if (it != profs.end() && !it->second.inference_done) {
+                it->second.add_handshake();
+            }
         }
-        pr.add_syn(dst, dp, now);
-        if (!pr.inference_done && pr.syn_count >= mn && pr.is_window_expired(now, ws))
-            infer(pr, now);
-
+        
+        // Track RST on any packet from a tracked IP
+        if (p->ptrs.tcph->is_rst()) {
+            auto it = profs.find(src);
+            if (it != profs.end() && !it->second.inference_done) {
+                it->second.add_rst();
+            }
+        }
+        
+        // Track incoming data to tracked IPs
+        {
+            auto it = profs.find(dst);
+            if (it != profs.end() && !it->second.inference_done) {
+                it->second.add_incoming_bytes(p->dsize > 0 ? p->dsize : 0);
+            }
+        }
+        
+        // Sweep: check stalled profiles every 500 packets
         static uint32_t sweep = 0;
-        if (++sweep % 1000 == 0) {
+        if (++sweep % 500 == 0) {
             for (auto& kv : profs) {
                 auto& pp = kv.second;
-                if (!pp.inference_done && pp.syn_count >= mn && pp.is_window_expired(now, ws))
+                double pp_elapsed = now - pp.window_start_ts;
+                if (!pp.inference_done && pp.syn_count >= mn && pp_elapsed >= 60.0)
                     infer(pp, now);
+                if (pp.is_window_expired(now, ws))
+                    pp.reset(kv.first, now);
             }
         }
     }
 
 private:
     double thr; std::string mp; uint32_t ws, mn;
+    std::unordered_set<uint32_t> suppress_set;
     Xgb xgb;
     std::unordered_map<uint32_t, BfcProfile> profs;
     static std::atomic<uint64_t> n_inf, n_alert;
 
     void infer(BfcProfile& pr, double now) {
-        double raw[7], proc[7];
+        double raw[10], proc[10];
         pr.compute_features(raw, ws);
         memcpy(proc, raw, sizeof(raw));
         BfcProfile::preprocess(proc, g_scaler);
-        float f[7]; for (unsigned i=0;i<7;i++) f[i] = proc[i];
+        float f[10]; for (unsigned i=0;i<10;i++) f[i] = proc[i];
         float score = 0; if (xgb.ok()) xgb.run(f, score);
         pr.inference_done = true; n_inf++;
 
         { static FILE* df = nullptr;
           if (!df) { df = fopen("/tmp/bfc_train_data.txt","w");
-            if(df) fprintf(df,"# lb syn_cnt dst_ips dst_ports port_ratio single_port_rate rate iat_cv score src_ip\n"); }
+            if(df) fprintf(df,"# lb syn_cnt dst_ips dst_ports port_ratio sps rate iat_cv hshake rst_ah bytes score src_ip\n"); }
           if(df) { int lbl=0;
             fprintf(df,"%d",lbl);
-            for(unsigned i=0;i<7;i++) fprintf(df," %.6f",raw[i]);
+            for(unsigned i=0;i<10;i++) fprintf(df," %.6f",raw[i]);
             fprintf(df," %.6f %u\n",(double)score, pr.src_ip); } }
 
-        bool alert = score > thr;
+        double hshake_r = pr.syn_count > 0 ? (double)pr.handshake_count/pr.syn_count : 0.0;
+        double rst_ah = pr.handshake_count > 0 ? (double)pr.rst_count/pr.handshake_count : 0.0;
+        double bps = pr.syn_count > 0 ? (double)pr.incoming_bytes/pr.syn_count : 0.0;
 
-        snort::LogMessage("[bfc] %u.%u.%u.%u syns=%u dsts=%zu ports=%zu sps=%.3f score=%.4f\n",
+        // ─── Heuristic suppression rules ────────────────────────────────
+        bool alert = score > thr;
+        bool suppressed = false;
+        const char* suppress_reason = "";
+        
+        // Rule 0: Whitelist
+        if (alert && suppress_set.find(pr.src_ip) != suppress_set.end()) {
+            suppressed = true;
+            suppress_reason = "whitelist";
+        }
+        
+        // Rule 1: Clean connections with data (FIN > RST) → not bruteforce
+        if (alert && !suppressed && hshake_r > 0.8 && rst_ah < 0.3 && bps > 1000) {
+            suppressed = true;
+            suppress_reason = "clean_conn";
+        }
+        
+        // ─── Alert dedup (30-minute cooldown per IP) ────────────────────
+        if (alert && !suppressed) {
+            double cooldown = 1800.0;
+            if (pr.last_alert_time > 0 && now - pr.last_alert_time < cooldown) {
+                suppressed = true;
+                suppress_reason = "dedup";
+            }
+        }
+
+        snort::LogMessage("[bfc] %u.%u.%u.%u syns=%u dsts=%zu ports=%zu sps=%.3f hshk=%.3f rst_ah=%.3f bps=%.0f score=%.4f%s%s\n",
             (pr.src_ip>>24)&0xFF,(pr.src_ip>>16)&0xFF,(pr.src_ip>>8)&0xFF,pr.src_ip&0xFF,
             pr.syn_count, pr.syn_dst_ips.size(), pr.syn_dst_ports.size(),
-            pr.single_port_score(), score);
+            pr.single_port_score(), hshake_r, rst_ah, bps, score,
+            suppressed ? " SUPPRESSED:" : "",
+            suppressed ? suppress_reason : "");
 
-        if (alert) {
-            n_alert++; snort::DetectionEngine::queue_event(BFC_GID, BFC_SID);
+        if (alert && !suppressed) {
+            n_alert++; 
+            pr.last_alert_time = now;
+            snort::DetectionEngine::queue_event(BFC_GID, BFC_SID);
             snort::LogMessage("[bfc] ALERT: %u.%u.%u.%u score=%.4f syns=%u ports=%zu\n",
                 (pr.src_ip>>24)&0xFF,(pr.src_ip>>16)&0xFF,(pr.src_ip>>8)&0xFF,pr.src_ip&0xFF,
                 score, pr.syn_count, pr.syn_dst_ports.size());

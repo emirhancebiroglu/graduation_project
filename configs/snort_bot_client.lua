@@ -22,7 +22,7 @@ ips =
 -- ─── Bot Client Inspector ─────────────────────────────
 bot_client_inspector =
 {
-    threshold    = 0.50,
+    threshold    = 0.85,
     model_path   = "/home/emirhan/bitirme/models/bot_client_model.json",
     window_sec   = 300,
     min_syns     = 3,

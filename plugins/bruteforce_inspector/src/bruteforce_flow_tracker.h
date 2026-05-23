@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-static constexpr unsigned AGG_FEATURE_COUNT = 7;
+static constexpr unsigned AGG_FEATURE_COUNT = 10;
 
 struct BfcScalerParams {
     double median[AGG_FEATURE_COUNT];
@@ -24,15 +24,26 @@ struct BfcProfile {
     std::unordered_set<uint16_t> syn_dst_ports;
     std::unordered_map<uint16_t, uint32_t> syn_dst_port_counts;
     std::deque<double> syn_timestamps;
+    
+    uint32_t rst_count;
+    uint32_t handshake_count;
+    uint32_t incoming_pkt_count;
+    uint64_t incoming_bytes;
 
     bool inference_done;
+    double last_alert_time = 0;
 
     void reset(uint32_t ip, double ts) {
         src_ip = ip; window_start_ts = ts;
         syn_count = 0; syn_dst_ips.clear();
         syn_dst_ports.clear(); syn_dst_port_counts.clear();
         syn_timestamps.clear();
+        rst_count = 0;
+        handshake_count = 0;
+        incoming_pkt_count = 0;
+        incoming_bytes = 0;
         inference_done = false;
+        // last_alert_time preserved across resets
     }
 
     void add_syn(uint32_t dip, uint16_t dport, double ts) {
@@ -41,6 +52,19 @@ struct BfcProfile {
         syn_dst_ports.insert(dport);
         syn_dst_port_counts[dport]++;
         syn_timestamps.push_back(ts);
+    }
+
+    void add_rst() {
+        rst_count++;
+    }
+
+    void add_handshake() {
+        handshake_count++;
+    }
+
+    void add_incoming_bytes(uint32_t bytes) {
+        incoming_pkt_count++;
+        incoming_bytes += bytes;
     }
 
     double iat_cv() const {
@@ -79,6 +103,10 @@ struct BfcProfile {
         raw[4] = single_port_score();
         raw[5] = window_sec > 0 ? tf / window_sec : 0.0;
         raw[6] = iat_cv();
+        raw[7] = tf > 0 ? static_cast<double>(handshake_count) / tf : 0.0;  // hshake_ratio
+        double hshake = static_cast<double>(handshake_count);
+        raw[8] = hshake > 0 ? static_cast<double>(rst_count) / hshake : 0.0;  // rst_after_hshake
+        raw[9] = tf > 0 ? static_cast<double>(incoming_bytes) / tf : 0.0;  // bytes_per_syn
     }
 
     static void preprocess(double* f, const BfcScalerParams& p) {

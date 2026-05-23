@@ -1,1 +1,1 @@
-alert tcp (gid:307; sid:1)
+alert ( gid:307; sid:1; msg:"Brute force SSH/FTP detection"; classtype:attempted-recon; )

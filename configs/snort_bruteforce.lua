@@ -22,10 +22,11 @@ ips =
 -- ─── Brute Force Inspector ──────────────────────────
 bruteforce_inspector =
 {
-    threshold    = 0.95,
+    threshold    = 0.42,
     model_path   = "/home/emirhan/bitirme/models/bruteforce_model.json",
-    window_sec   = 60,
-    min_syns     = 5,
+    window_sec   = 120,
+    min_syns     = 3,
+    -- suppress_ips = "172.16.0.1",
 }
 
 alert_csv = { file = true }
