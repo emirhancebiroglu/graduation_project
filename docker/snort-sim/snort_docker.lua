@@ -118,3 +118,27 @@ dos_aggregator =
     window_sec   = 60,
     threshold    = 0.30,
 }
+
+-- ─── PortScan Inspector (GID:302) ───────────────────────────────
+portscan_inspector =
+{
+    threshold    = 0.90,
+    model_path   = "/home/emirhan/bitirme/models/portscan_aggregator_model_v4d.json",
+    window_sec   = 60,
+}
+
+-- ─── Bot Client Inspector (GID:306) ─────────────────────────────
+bot_client_inspector =
+{
+    threshold    = 0.85,
+    model_path   = "/home/emirhan/bitirme/models/bot_client_model.json",
+    window_sec   = 300,
+}
+
+-- ─── Bruteforce Inspector (GID:307) ─────────────────────────────
+bruteforce_inspector =
+{
+    threshold    = 0.85,
+    model_path   = "/home/emirhan/bitirme/models/bruteforce_model.json",
+    window_sec   = 60,
+}

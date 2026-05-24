@@ -2,3 +2,6 @@ alert ip any any -> any any ( msg:"DoS attack detected (XGBoost)"; gid:301; sid:
 alert ip any any -> any any ( msg:"DoS volumetric/SYN flood detected (XGBoost)"; gid:301; sid:2; rev:1; classtype:denial-of-service; )
 alert ip any any -> any any ( msg:"DoS slow-rate attack detected (XGBoost)"; gid:301; sid:3; rev:1; classtype:denial-of-service; )
 alert tcp (gid:303; sid:1)
+alert tcp (gid:302; sid:1)
+alert tcp (gid:306; sid:1)
+alert tcp (gid:307; sid:1)
