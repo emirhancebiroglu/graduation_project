@@ -7,26 +7,99 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { Alert, Engine, ShapContribution } from "@/lib/types";
+import type { Alert, Engine, CoreEngine, ShapContribution } from "@/lib/types";
 
 type Filter = "all" | "xgboost" | "community";
 
 type Props = {
   alerts: Alert[];
-  engineAlerts: Record<Engine, Alert[]>;
+  engineAlerts: Record<CoreEngine, Alert[]>;
   onClear: () => void;
 };
 
+type Severity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+
+function getSeverity(alert: Alert): Severity {
+  if (alert.engine === "community") return "LOW";
+  const s = alert.score;
+  if (typeof s !== "number") return "LOW";
+  if (s >= 0.95) return "CRITICAL";
+  if (s >= 0.85) return "HIGH";
+  if (s >= 0.70) return "MEDIUM";
+  return "LOW";
+}
+
+const _SEVERITY_STYLE: Record<Severity, { color: string; border: string; bg: string; dot: string }> = {
+  CRITICAL: { color: "#ff3b3b", border: "rgba(255,59,59,0.4)",  bg: "rgba(255,59,59,0.10)", dot: "#ff3b3b" },
+  HIGH:     { color: "#f97316", border: "rgba(249,115,22,0.4)",  bg: "rgba(249,115,22,0.10)", dot: "#f97316" },
+  MEDIUM:   { color: "#f59e0b", border: "rgba(245,158,11,0.35)", bg: "rgba(245,158,11,0.08)", dot: "#f59e0b" },
+  LOW:      { color: "#64748b", border: "rgba(100,116,139,0.3)", bg: "rgba(100,116,139,0.06)", dot: "#64748b" },
+};
+
+function SeverityChip({ alert }: { alert: Alert }): React.ReactElement {
+  const sev = getSeverity(alert);
+  const st = _SEVERITY_STYLE[sev];
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[8px] font-mono px-1.5 py-0.5 font-bold"
+      style={{ border: `1px solid ${st.border}`, background: st.bg, color: st.color, letterSpacing: "0.06em" }}
+    >
+      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: st.dot, boxShadow: `0 0 4px ${st.dot}` }} />
+      {sev}
+    </span>
+  );
+}
+
+type AttackType = "DoS" | "DDoS" | "Scan" | "BruteForce" | "Bot" | "Exploit" | "Other";
+
+const _TECHNIQUE_TO_TYPE: Record<string, AttackType> = {
+  T1499: "DoS",
+  T1498: "DDoS",
+  T1046: "Scan",
+  T1110: "BruteForce",
+  T1071: "Bot",
+  T1190: "Exploit",
+};
+
+const _TYPE_STYLE: Record<AttackType, { color: string; border: string; bg: string }> = {
+  DoS:        { color: "#ff3b3b", border: "rgba(255,59,59,0.35)",   bg: "rgba(255,59,59,0.08)" },
+  DDoS:       { color: "#f97316", border: "rgba(249,115,22,0.35)",  bg: "rgba(249,115,22,0.08)" },
+  Scan:       { color: "#a78bfa", border: "rgba(139,92,246,0.35)",  bg: "rgba(139,92,246,0.08)" },
+  BruteForce: { color: "#f59e0b", border: "rgba(245,158,11,0.35)",  bg: "rgba(245,158,11,0.08)" },
+  Bot:        { color: "#38bdf8", border: "rgba(56,189,248,0.35)",  bg: "rgba(56,189,248,0.08)" },
+  Exploit:    { color: "#f43f5e", border: "rgba(244,63,94,0.35)",   bg: "rgba(244,63,94,0.08)" },
+  Other:      { color: "#64748b", border: "rgba(100,116,139,0.25)", bg: "rgba(100,116,139,0.05)" },
+};
+
+function getAttackType(alert: Alert): AttackType {
+  if (alert.mitre_technique && alert.mitre_technique in _TECHNIQUE_TO_TYPE) {
+    return _TECHNIQUE_TO_TYPE[alert.mitre_technique];
+  }
+  return "Other";
+}
+
+function AttackTypeBadge({ alert }: { alert: Alert }): React.ReactElement {
+  const type = getAttackType(alert);
+  const st = _TYPE_STYLE[type];
+  return (
+    <span
+      className="text-[8px] font-mono px-1.5 py-0.5 font-bold shrink-0"
+      style={{ border: `1px solid ${st.border}`, background: st.bg, color: st.color, letterSpacing: "0.04em" }}
+    >
+      {type}
+    </span>
+  );
+}
+
 function rowColor(alert: Alert): string {
-  if (alert.engine === "community") return "#00d4ff";
-  if (typeof alert.score === "number" && alert.score > 0.95) return "#ff3b3b";
-  return "#f59e0b";
+  const sev = getSeverity(alert);
+  return _SEVERITY_STYLE[sev].dot;
 }
 
 function scoreBadgeStyle(alert: Alert): React.CSSProperties {
-  if (alert.engine === "community") return { border: "1px solid rgba(0,212,255,0.3)", background: "rgba(0,212,255,0.08)", color: "#00d4ff" };
-  if (typeof alert.score === "number" && alert.score > 0.95) return { border: "1px solid rgba(255,59,59,0.35)", background: "rgba(255,59,59,0.1)", color: "#ff3b3b" };
-  return { border: "1px solid rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.08)", color: "#f59e0b" };
+  const sev = getSeverity(alert);
+  const st = _SEVERITY_STYLE[sev];
+  return { border: `1px solid ${st.border}`, background: st.bg, color: st.color };
 }
 
 function scoreLabel(alert: Alert): string {
@@ -37,8 +110,10 @@ function scoreLabel(alert: Alert): string {
 function scoreBand(alert: Alert): string {
   if (alert.engine === "community") return "Community rule match";
   if (alert.score === undefined) return "XGBoost (no score)";
-  if (alert.score > 0.95) return "Critical (score > 0.95)";
-  return "High (score 0.90–0.95)";
+  if (alert.score >= 0.95) return "Critical (score ≥ 0.95)";
+  if (alert.score >= 0.85) return "High (score ≥ 0.85)";
+  if (alert.score >= 0.70) return "Medium (score ≥ 0.70)";
+  return "Low";
 }
 
 function gtBadge(gt: string | null | undefined): React.ReactNode {
@@ -60,6 +135,34 @@ function gtBadge(gt: string | null | undefined): React.ReactNode {
   return null;
 }
 
+const _MITRE_NAMES: Record<string, string> = {
+  T1499: "Endpoint DoS",
+  T1498: "Network DoS",
+  T1046: "Service Discovery",
+  T1110: "Brute Force",
+  T1071: "App Layer Protocol",
+  T1190: "Exploit Public App",
+};
+
+function mitreBadge(technique: string | null | undefined): React.ReactNode {
+  if (!technique) return null;
+  const name = _MITRE_NAMES[technique] ?? technique;
+  return (
+    <span
+      title={name}
+      className="text-[8px] font-mono px-1 py-0.5 font-bold tabular-nums"
+      style={{
+        border: "1px solid rgba(139,92,246,0.35)",
+        background: "rgba(139,92,246,0.08)",
+        color: "#a78bfa",
+        letterSpacing: "0.04em",
+      }}
+    >
+      {technique}
+    </span>
+  );
+}
+
 function ifBadge(ifLabel: string | null | undefined): React.ReactNode {
   if (!ifLabel) return null;
   if (ifLabel === "anomaly_candidate") {
@@ -70,7 +173,7 @@ function ifBadge(ifLabel: string | null | undefined): React.ReactNode {
     );
   }
   return (
-    <span className="text-[8px] font-mono px-1 py-0.5 font-bold" style={{ border: "1px solid rgba(100,116,139,0.3)", background: "rgba(100,116,139,0.08)", color: "rgba(100,116,139,0.6)", letterSpacing: "0.05em" }}>
+    <span className="text-[8px] font-mono px-1 py-0.5 font-bold" style={{ border: "1px solid rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.1)", color: "rgba(148,163,184,0.85)", letterSpacing: "0.05em" }}>
       KNOWN
     </span>
   );
@@ -78,7 +181,7 @@ function ifBadge(ifLabel: string | null | undefined): React.ReactNode {
 
 const FILTERS: { label: string; value: Filter }[] = [
   { label: "ALL", value: "all" },
-  { label: "XGBOOST", value: "xgboost" },
+  { label: "ML ENSEMBLE", value: "xgboost" },
   { label: "COMMUNITY", value: "community" },
 ];
 
@@ -87,6 +190,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
   const [selected, setSelected] = useState<Alert | null>(null);
   const [userScrolled, setUserScrolled] = useState(false);
   const [shap, setShap] = useState<ShapContribution[] | null>(null);
+  const [shapNarrative, setShapNarrative] = useState<string | null>(null);
   const [shapLoading, setShapLoading] = useState(false);
   const [shapError, setShapError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -96,6 +200,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
     setShapLoading(true);
     setShapError(null);
     setShap(null);
+    setShapNarrative(null);
     try {
       const res = await fetch(`http://localhost:8000/api/explain/${alertId}`);
       if (!res.ok) {
@@ -103,7 +208,9 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
         setShapError(body.detail ?? `HTTP ${res.status}`);
         return;
       }
-      setShap(await res.json());
+      const data = await res.json();
+      setShap(data.contributions ?? data);
+      setShapNarrative(data.narrative ?? null);
     } catch (e) {
       setShapError(String(e));
     } finally {
@@ -114,6 +221,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
   function handleSelectAlert(a: Alert) {
     setSelected(a);
     setShap(null);
+    setShapNarrative(null);
     setShapError(null);
     setShapLoading(false);
   }
@@ -123,7 +231,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
   const filtered =
     filter === "all"
       ? alerts
-      : engineAlerts[filter as Engine];
+      : engineAlerts[filter as CoreEngine];
   const displayed = filtered.slice(0, 200);
 
   useEffect(() => {
@@ -153,7 +261,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
               style={{
                 border: `1px solid ${filter === f.value ? "rgba(0,212,255,0.4)" : "rgba(0,212,255,0.1)"}`,
                 background: filter === f.value ? "rgba(0,212,255,0.1)" : "transparent",
-                color: filter === f.value ? "#00d4ff" : "rgba(100,116,139,0.7)",
+                color: filter === f.value ? "#00d4ff" : "rgba(148,163,184,0.9)",
                 letterSpacing: "0.1em",
               }}
             >
@@ -161,7 +269,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
             </button>
           ))}
         </div>
-        <span className="text-[10px] font-mono" style={{ color: "rgba(100,116,139,0.5)" }}>
+        <span className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.75)" }}>
           {displayed.length}/{filtered.length}
         </span>
         <div className="ml-auto flex items-center gap-2">
@@ -177,7 +285,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
           <button
             onClick={onClear}
             className="text-[10px] font-mono px-2 py-1 transition-all"
-            style={{ border: "1px solid rgba(100,116,139,0.2)", color: "rgba(100,116,139,0.6)", background: "transparent" }}
+            style={{ border: "1px solid rgba(148,163,184,0.4)", color: "rgba(148,163,184,0.85)", background: "transparent" }}
           >
             CLEAR
           </button>
@@ -188,20 +296,20 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-auto min-h-0">
         {/* Header row */}
         <div className="grid sticky top-0 gap-2 px-2 py-1.5 text-[9px] font-mono border-b" style={{
-          gridTemplateColumns: "80px 80px 72px 1fr 1fr 50px 60px 1fr",
+          gridTemplateColumns: "72px 90px 72px 1fr 1fr 50px 60px 1fr",
           background: "#0f1318",
           borderColor: "rgba(0,212,255,0.08)",
           color: "rgba(0,212,255,0.35)",
           letterSpacing: "0.12em",
         }}>
           <span>TIME</span>
-          <span>ENGINE</span>
+          <span>SEVERITY</span>
           <span>GT</span>
           <span>SOURCE</span>
           <span>DESTINATION</span>
           <span>PROTO</span>
           <span>SCORE</span>
-          <span>MESSAGE</span>
+          <span>TYPE · MESSAGE</span>
         </div>
 
         {/* Data rows */}
@@ -214,18 +322,16 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
                 onClick={() => handleSelectAlert(a)}
                 className="ids-row grid gap-2 px-2 py-2 cursor-pointer transition-all"
                 style={{
-                  gridTemplateColumns: "80px 80px 72px 1fr 1fr 50px 60px 1fr",
-                  borderLeft: `2px solid ${color}22`,
+                  gridTemplateColumns: "72px 90px 72px 1fr 1fr 50px 60px 1fr",
+                  borderLeft: `2px solid ${color}33`,
                   background: "transparent",
                 }}
               >
-                <span className="text-[10px] font-mono" style={{ color: "rgba(100,116,139,0.6)" }}>
+                <span className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.85)" }}>
                   {new Date(a.ts).toLocaleTimeString()}
                 </span>
-                <span>
-                  <span className="text-[9px] font-mono px-1.5 py-0.5" style={scoreBadgeStyle(a)}>
-                    {a.engine === "xgboost" ? "XGB" : "COM"}
-                  </span>
+                <span className="flex items-center">
+                  <SeverityChip alert={a} />
                 </span>
                 <span className="flex items-center">
                   {gtBadge(a.ground_truth)}
@@ -233,12 +339,16 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
                 <span className="text-[10px] font-mono truncate" style={{ color }}>
                   {a.src_ip}:{a.src_port}
                 </span>
-                <span className="text-[10px] font-mono truncate" style={{ color: "rgba(100,116,139,0.8)" }}>
+                <span className="text-[10px] font-mono truncate" style={{ color: "rgba(148,163,184,0.95)" }}>
                   {a.dst_ip}:{a.dst_port}
                 </span>
-                <span className="text-[10px] font-mono" style={{ color: "rgba(100,116,139,0.6)" }}>{a.proto}</span>
+                <span className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.85)" }}>{a.proto}</span>
                 <span className="text-[10px] font-mono tabular-nums" style={{ color }}>{scoreLabel(a)}</span>
-                <span className="text-[10px] font-mono truncate" style={{ color: "rgba(100,116,139,0.6)" }}>{a.msg}</span>
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <AttackTypeBadge alert={a} />
+                  {mitreBadge(a.mitre_technique)}
+                  <span className="text-[10px] font-mono truncate" style={{ color: "rgba(148,163,184,0.85)" }}>{a.msg}</span>
+                </span>
               </div>
             );
           })}
@@ -259,9 +369,10 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
             <DialogTitle className="flex items-center gap-2 font-mono text-sm" style={{ color: "#e2e8f0" }}>
               ALERT DETAIL
               {selected && (
-                <span className="text-[10px] px-1.5 py-0.5 font-mono" style={scoreBadgeStyle(selected)}>
-                  {selected.engine}
-                </span>
+                <>
+                  <SeverityChip alert={selected} />
+                  <AttackTypeBadge alert={selected} />
+                </>
               )}
             </DialogTitle>
           </DialogHeader>
@@ -285,10 +396,26 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
                     <span className="flex items-center gap-2">
                       {ifBadge(selected.if_label)}
                       {selected.if_score != null && (
-                        <span className="text-[10px] font-mono tabular-nums" style={{ color: "rgba(100,116,139,0.6)" }}>
+                        <span className="text-[10px] font-mono tabular-nums" style={{ color: "rgba(148,163,184,0.85)" }}>
                           score={selected.if_score.toFixed(4)}
                         </span>
                       )}
+                    </span>
+                  </div>
+                )}
+                {selected.mitre_technique && (
+                  <div className="flex gap-3 items-center pt-1 border-t" style={{ borderColor: "rgba(139,92,246,0.12)" }}>
+                    <span className="text-[10px] font-mono w-28 shrink-0" style={{ color: "rgba(139,92,246,0.6)", letterSpacing: "0.1em" }}>MITRE ATT&CK</span>
+                    <span className="flex items-center gap-2 flex-wrap">
+                      {mitreBadge(selected.mitre_technique)}
+                      {selected.mitre_tactic && (
+                        <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(139,92,246,0.2)", background: "rgba(139,92,246,0.05)", color: "rgba(167,139,250,0.6)" }}>
+                          {selected.mitre_tactic}
+                        </span>
+                      )}
+                      <span className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.75)" }}>
+                        {_MITRE_NAMES[selected.mitre_technique] ?? ""}
+                      </span>
                     </span>
                   </div>
                 )}
@@ -297,6 +424,26 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
               {/* SHAP Explain — XGBoost only */}
               {selected.engine === "xgboost" && (
                 <div className="space-y-2">
+                  {/* Narrative — always visible after fetch */}
+                  {shapNarrative && (
+                    <div
+                      className="px-3 py-2.5"
+                      style={{
+                        borderLeft: "3px solid rgba(245,158,11,0.7)",
+                        background: "rgba(245,158,11,0.06)",
+                        border: "1px solid rgba(245,158,11,0.18)",
+                        borderLeftWidth: "3px",
+                      }}
+                    >
+                      <p className="text-[9px] font-mono mb-1" style={{ color: "rgba(245,158,11,0.5)", letterSpacing: "0.1em" }}>
+                        AI ANALYSIS
+                      </p>
+                      <p className="text-[11px] font-mono leading-relaxed" style={{ color: "#e2e8f0" }}>
+                        {shapNarrative}
+                      </p>
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => fetchShap(selected.id)}
@@ -310,9 +457,9 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
                         cursor: shapLoading ? "wait" : "pointer",
                       }}
                     >
-                      {shapLoading ? "COMPUTING…" : "EXPLAIN (SHAP)"}
+                      {shapLoading ? "COMPUTING…" : shap ? "RE-EXPLAIN (SHAP)" : "EXPLAIN (SHAP)"}
                     </button>
-                    <span className="text-[9px] font-mono" style={{ color: "rgba(100,116,139,0.4)" }}>top-5 features</span>
+                    <span className="text-[9px] font-mono" style={{ color: "rgba(148,163,184,0.65)" }}>top-5 features</span>
                   </div>
                   {shapError && (
                     <div className="text-[10px] font-mono p-2" style={{ background: "rgba(255,59,59,0.07)", border: "1px solid rgba(255,59,59,0.2)", color: "#ff3b3b" }}>
@@ -361,18 +508,23 @@ function ShapChart({ contributions }: { contributions: ShapContribution[] }) {
         const barColor = isAttack ? "#ff3b3b" : "#10b981";
         return (
           <div key={c.feature} className="space-y-0.5">
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-mono" style={{ color: "#94a3b8" }}>{c.feature}</span>
-              <div className="flex items-center gap-2">
-                <span className="text-[9px] font-mono tabular-nums" style={{ color: "rgba(100,116,139,0.6)" }}>
-                  val={c.raw_value}
+            <div className="flex justify-between items-center gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[10px] font-mono font-semibold shrink-0" style={{ color: "#94a3b8" }}>{c.feature}</span>
+                {c.description && c.description !== c.feature && (
+                  <span className="text-[9px] font-mono truncate" style={{ color: "rgba(148,163,184,0.5)" }}>({c.description})</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[9px] font-mono tabular-nums" style={{ color: "rgba(148,163,184,0.85)" }}>
+                  {typeof c.raw_value === "number" && c.raw_value === Math.floor(c.raw_value) ? c.raw_value : c.raw_value?.toFixed(3)}
                 </span>
                 <span className="text-[9px] font-mono tabular-nums font-bold" style={{ color: barColor }}>
                   {c.shap_value > 0 ? "+" : ""}{c.shap_value.toFixed(3)}
                 </span>
               </div>
             </div>
-            <div className="relative h-1.5 rounded-none" style={{ background: "rgba(100,116,139,0.12)" }}>
+            <div className="relative h-1.5 rounded-none" style={{ background: "rgba(148,163,184,0.18)" }}>
               <div
                 className="absolute top-0 h-full transition-all"
                 style={{

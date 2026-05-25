@@ -22,8 +22,8 @@ ips =
 -- ─── Bot Client Inspector ─────────────────────────────
 bot_client_inspector =
 {
-    threshold    = 0.85,
-    model_path   = "/home/emirhan/bitirme/models/bot_client_model.json",
+    threshold    = 0.70,
+    model_path   = "/home/emirhan/bitirme/models/bot_client_v4.json",
     window_sec   = 300,
     min_syns     = 3,
     -- suppress_ips = "192.168.10.3,192.168.10.50",  -- whitelist known benign IPs

@@ -1,4 +1,5 @@
-export type Engine = "xgboost" | "community";
+export type Engine = "xgboost" | "community" | "portscan" | "dos_agg" | "bot" | "bruteforce";
+export type CoreEngine = "xgboost" | "community";
 
 export type Alert = {
   id: string;
@@ -16,10 +17,13 @@ export type Alert = {
   ground_truth?: string | null;
   if_score?: number | null;
   if_label?: string | null;
+  mitre_technique?: string | null;
+  mitre_tactic?: string | null;
 };
 
 export type ShapContribution = {
   feature: string;
+  description: string;
   raw_value: number;
   shap_value: number;
   direction: "attack" | "benign";

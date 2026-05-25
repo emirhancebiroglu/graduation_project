@@ -1,17 +1,42 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useIdsStream } from "@/lib/use-ids-stream";
 import { AttackControl } from "@/components/attack-control";
 import { AlertFeed } from "@/components/alert-feed";
 import { EvaluationReport } from "@/components/evaluation-report";
 import { ImpactSummary } from "@/components/impact-summary";
+import { TrafficChart } from "@/components/traffic-chart";
+import { DetectionCoverage } from "@/components/detection-coverage";
+
+type FrozenMetrics = {
+  xgb_FP: number;
+  community_FP: number;
+  fp_gap: number;
+};
 
 export default function Page() {
   const stream = useIdsStream();
   const [isStarting, setIsStarting] = useState(false);
-  const { connected, snortRunning, pcapProgress, replayPhase, evaluation, recentAlerts, alerts, engineAlerts } = stream;
+  const { connected, snortRunning, pcapProgress, replayPhase, evaluation, alerts, engineAlerts } = stream;
   const [feedAlerts, setFeedAlerts] = useState(alerts);
   const [feedEngineAlerts, setFeedEngineAlerts] = useState(engineAlerts);
+  const [frozenMetrics, setFrozenMetrics] = useState<FrozenMetrics | null>(null);
+  const [replayStartedAt, setReplayStartedAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch("/api/config")
+      .then((r) => r.json())
+      .then((cfg) => {
+        setFrozenMetrics({
+          xgb_FP: cfg.metrics?.FP ?? 7393,
+          community_FP: cfg.community_baseline?.FP ?? 36633,
+          fp_gap: cfg.community_baseline?.fp_gap ?? 29240,
+        });
+      })
+      .catch(() => {
+        setFrozenMetrics({ xgb_FP: 7393, community_FP: 36633, fp_gap: 29240 });
+      });
+  }, []);
 
   // Sync feed with stream but allow manual clear
   useEffect(() => {
@@ -27,11 +52,19 @@ export default function Page() {
     return () => clearInterval(id);
   }, []);
 
+  const prevSnortRunning = useRef(false);
   useEffect(() => {
     if (snortRunning && isStarting) setIsStarting(false);
+    if (snortRunning && !prevSnortRunning.current) setReplayStartedAt(Date.now());
+    prevSnortRunning.current = snortRunning;
   }, [snortRunning, isStarting]);
 
   const effectiveRunning = snortRunning || isStarting;
+
+  const chartMetrics = useMemo(() => ({
+    xgboost:   { total: feedEngineAlerts.xgboost.length,   alertsPerSec: 0 },
+    community: { total: feedEngineAlerts.community.length, alertsPerSec: 0 },
+  }), [feedEngineAlerts.xgboost.length, feedEngineAlerts.community.length]);
 
   return (
     <main className="flex min-h-screen flex-col" style={{ background: "#0a0c0f" }}>
@@ -60,7 +93,7 @@ export default function Page() {
           </div>
           <div>
             <h1 className="text-base font-semibold tracking-widest uppercase" style={{ fontFamily: '"IBM Plex Mono", monospace', color: "#e2e8f0", letterSpacing: "0.2em" }}>
-              Aegis IDS
+              CyberSense IDS
             </h1>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="section-label">INTRUSION DETECTION SYSTEM</span>
@@ -74,6 +107,32 @@ export default function Page() {
           <span className="section-label tabular-nums" style={{ color: "rgba(0,212,255,0.35)" }}>
             {clockStr ? `${clockStr} UTC` : null}
           </span>
+
+          {/* ── ENGINE HEALTH CHIP ── */}
+          <div
+            className="flex items-center gap-2 px-3 py-1.5"
+            style={{
+              border: `1px solid ${effectiveRunning ? "rgba(16,185,129,0.25)" : "rgba(0,212,255,0.12)"}`,
+              background: effectiveRunning ? "rgba(16,185,129,0.05)" : "rgba(0,212,255,0.03)",
+            }}
+          >
+            <span
+              className="w-1.5 h-1.5 rounded-full"
+              style={{
+                background: effectiveRunning ? "#10b981" : "#475569",
+                boxShadow: effectiveRunning ? "0 0 6px #10b981" : "none",
+                animation: effectiveRunning ? "status-breathe 2s ease-in-out infinite" : "none",
+              }}
+            />
+            <span className="section-label" style={{ color: effectiveRunning ? "#10b981" : "rgba(148,163,184,0.5)" }}>
+              {effectiveRunning ? "5 INSPECTORS" : "STANDBY"}
+            </span>
+            <span className="section-label" style={{ color: "rgba(0,212,255,0.2)" }}>·</span>
+            <span className="section-label tabular-nums" style={{ color: effectiveRunning ? "rgba(148,163,184,0.75)" : "rgba(148,163,184,0.35)" }}>
+              176MB
+            </span>
+          </div>
+
           <div
             className="flex items-center gap-1.5 px-3 py-1.5"
             style={{ border: `1px solid ${connected ? "rgba(0,212,255,0.25)" : "rgba(255,59,59,0.25)"}`, background: connected ? "rgba(0,212,255,0.05)" : "rgba(255,59,59,0.05)" }}
@@ -136,7 +195,7 @@ export default function Page() {
             }}
           >
             {replayPhase === "running"
-              ? "● LIVE DETECTION — FULL WEDNESDAY PCAP"
+              ? "● LIVE DETECTION — CIC-IDS2017 WEDNESDAY"
               : replayPhase === "evaluating"
               ? "◌ COMPUTING EVALUATION…"
               : "✓ EVALUATION COMPLETE"}
@@ -168,16 +227,30 @@ export default function Page() {
       {/* ── MAIN CONTENT ── */}
       <div className="flex-1 p-5 flex flex-col gap-4">
         {/* ROI / Impact — hero section, most prominent */}
-        <ImpactSummary evaluation={evaluation} replayPhase={replayPhase} pcapProgress={pcapProgress} recentAlerts={recentAlerts} />
+        <ImpactSummary evaluation={evaluation} replayPhase={replayPhase} pcapProgress={pcapProgress} frozenMetrics={frozenMetrics} />
 
         {/* Performance Metrics */}
         <EvaluationReport evaluation={evaluation} />
+
+        {/* Detection Coverage — all 5 models, locked metrics */}
+        <DetectionCoverage />
 
         {/* Replay Control */}
         <AttackControl
           snortRunning={effectiveRunning}
           onStarting={(v) => setIsStarting(v)}
         />
+
+        {/* Detection Timeline — alert rate chart with event markers */}
+        {(feedAlerts.length > 0 || replayPhase === "running" || replayPhase === "complete") && (
+          <TrafficChart
+            metrics={chartMetrics}
+            snortRunning={effectiveRunning}
+            replayStartedAt={replayStartedAt}
+            pcapProgress={pcapProgress}
+            alerts={feedAlerts}
+          />
+        )}
 
         {/* Alert Feed — live alerts with IF anomaly tags + SHAP explain */}
         {(feedAlerts.length > 0 || replayPhase === "running") && (
@@ -215,7 +288,7 @@ export default function Page() {
       {/* Footer */}
       <footer className="px-6 py-2 flex items-center justify-between border-t" style={{ borderColor: "rgba(0,212,255,0.08)", background: "rgba(10,12,15,0.9)" }}>
         <span className="section-label" style={{ color: "rgba(0,212,255,0.2)" }}>
-          AEGIS IDS // CIC-IDS2017 WEDNESDAY DATASET // XGBOOST v1 PRODUCTION MODEL
+          CYBERSENSE IDS // CIC-IDS2017 WEDNESDAY // ML ENSEMBLE + COMMUNITY RULES
         </span>
         {evaluation && (
           <span className="section-label" style={{ color: "rgba(0,212,255,0.2)" }}>

@@ -10,8 +10,17 @@ alert ip any any -> any any ( gid:301; sid:1; rev:1; msg:"DoS per-flow detected"
 alert ip any any -> any any ( gid:301; sid:2; rev:1; msg:"DoS volumetric detected"; classtype:misc-activity; )
 alert ip any any -> any any ( gid:301; sid:3; rev:1; msg:"DoS slow-rate detected"; classtype:misc-activity; )
 
+# PortScan Inspector stub — GID=302
+alert tcp any any -> any any ( gid:302; sid:1; rev:1; msg:"PortScan detected"; classtype:misc-activity; )
+
+# DoS Aggregator stub — GID=303
+alert tcp any any -> any any ( gid:303; sid:1; rev:1; msg:"DoS SYN flood detected"; classtype:misc-activity; )
+
 # Bot Client stub — GID=306
 alert tcp any any -> any any ( gid:306; sid:1; rev:1; msg:"Bot client detected"; classtype:misc-activity; )
 
 # Brute Force stub — GID=307
 alert tcp any any -> any any ( gid:307; sid:1; rev:1; msg:"Brute force SSH/FTP detected"; classtype:misc-activity; )
+
+# DDoS Aggregator stub — GID=304
+alert tcp any any -> any any ( gid:304; sid:1; rev:1; msg:"DDoS cross-flow detected"; classtype:misc-activity; )

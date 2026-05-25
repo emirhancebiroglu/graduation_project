@@ -22,8 +22,8 @@ ips =
 -- ─── Brute Force Inspector ──────────────────────────
 bruteforce_inspector =
 {
-    threshold    = 0.42,
-    model_path   = "/home/emirhan/bitirme/models/bruteforce_model.json",
+    threshold    = 0.95,
+    model_path   = "/home/emirhan/bitirme/models/bruteforce_model_v3.json",
     window_sec   = 120,
     min_syns     = 3,
     -- suppress_ips = "172.16.0.1",

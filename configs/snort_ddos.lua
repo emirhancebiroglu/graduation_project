@@ -78,7 +78,7 @@ if ( tweaks ~= nil ) then include(tweaks .. '.lua') end
 ddos_aggregator =
 {
     threshold    = 0.50,
-    model_path   = "/home/emirhan/bitirme/models/ddos_aggregator_model.json",
+    model_path   = "/home/emirhan/bitirme/models/ddos_aggregator_model_v3.json",
     window_sec   = 60,
     min_packets  = 3,
 }

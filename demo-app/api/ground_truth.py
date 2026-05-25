@@ -20,9 +20,34 @@ IP_MAP = {
     "192.168.10.51": "172.16.0.1",
 }
 
+DAILY_CSVS: dict[str, list[str]] = {
+    "monday":    ["Monday-WorkingHours.pcap_ISCX.csv"],
+    "tuesday":   ["Tuesday-WorkingHours.pcap_ISCX.csv"],
+    "wednesday": ["Wednesday-workingHours.pcap_ISCX.csv"],
+    "thursday":  [
+        "Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv",
+        "Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv",
+    ],
+    "friday":    [
+        "Friday-WorkingHours-Morning.pcap_ISCX.csv",
+        "Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv",
+        "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv",
+    ],
+}
+
+# Legacy — kept for backward compat
 WEDNESDAY_CSV_NAME = "Wednesday-workingHours.pcap_ISCX.csv"
 
 DEFAULT_CSV_DIR = Path.home() / "bitirme/data/raw/cicids2017"
+
+
+def _day_from_pcap(pcap_path: str) -> str:
+    """Infer day key from PCAP filename (case-insensitive)."""
+    name = pcap_path.lower()
+    for day in DAILY_CSVS:
+        if day in name:
+            return day
+    return "wednesday"
 
 
 def _is_valid_ip(ip: str) -> bool:
@@ -74,10 +99,11 @@ def _make_flow_ids(
 
 
 class GroundTruthLoader:
-    _instance: GroundTruthLoader | None = None
+    _instances: dict[str, GroundTruthLoader] = {}
     _lock = threading.Lock()
 
-    def __init__(self, csv_dir: Path | None = None):
+    def __init__(self, day: str = "wednesday", csv_dir: Path | None = None):
+        self.day = day
         self.csv_dir = csv_dir or DEFAULT_CSV_DIR
         self._flow_data: dict[str, dict] = {}
         self._total_rows: int = 0
@@ -87,28 +113,29 @@ class GroundTruthLoader:
         self._load_error: str | None = None
 
     @classmethod
-    def get_instance(cls, csv_dir: Path | None = None) -> GroundTruthLoader:
+    def get_instance(cls, day: str = "wednesday", csv_dir: Path | None = None) -> GroundTruthLoader:
         with cls._lock:
-            if cls._instance is None:
-                cls._instance = cls(csv_dir)
-            return cls._instance
+            if day not in cls._instances:
+                cls._instances[day] = cls(day, csv_dir)
+            return cls._instances[day]
+
+    @classmethod
+    def get_instance_for_pcap(cls, pcap_path: str, csv_dir: Path | None = None) -> GroundTruthLoader:
+        day = _day_from_pcap(pcap_path)
+        return cls.get_instance(day, csv_dir)
+
+    @classmethod
+    def reset(cls) -> None:
+        with cls._lock:
+            cls._instances.clear()
 
     def ensure_loaded(self) -> None:
         if self._loaded:
             return
         self._load()
 
-    def _load(self) -> None:
-        csv_path = self.csv_dir / WEDNESDAY_CSV_NAME
-        if not csv_path.exists():
-            self._load_error = f"Wednesday CSV not found: {csv_path}"
-            logger.error(self._load_error)
-            self._loaded = True
-            return
-
+    def _load_one_csv(self, csv_path: Path, skipped_ref: list[int]) -> None:
         logger.info(f"Loading ground truth CSV: {csv_path}")
-        skipped = 0
-
         try:
             with open(csv_path, newline="", encoding="utf-8", errors="replace") as fh:
                 reader = csv.DictReader(fh)
@@ -118,7 +145,7 @@ class GroundTruthLoader:
                     flow_id = raw_flow_id.strip("\r\n")
                     label = raw_label.strip("\r\n")
                     if not flow_id:
-                        skipped += 1
+                        skipped_ref[0] += 1
                         continue
                     self._total_rows += 1
                     is_attack = label != "BENIGN"
@@ -133,16 +160,36 @@ class GroundTruthLoader:
                     else:
                         self._flow_data[flow_id]["benign_rows"] += 1
         except Exception as exc:
-            self._load_error = f"Failed to read CSV: {exc}"
+            self._load_error = f"Failed to read CSV {csv_path}: {exc}"
+            logger.error(self._load_error)
+
+    def _load(self) -> None:
+        csv_names = DAILY_CSVS.get(self.day, DAILY_CSVS["wednesday"])
+        skipped_ref = [0]
+        found_any = False
+
+        for csv_name in csv_names:
+            csv_path = self.csv_dir / csv_name
+            if not csv_path.exists():
+                logger.warning(f"GT CSV not found (skipping): {csv_path}")
+                continue
+            found_any = True
+            self._load_one_csv(csv_path, skipped_ref)
+            if self._load_error:
+                self._loaded = True
+                return
+
+        if not found_any:
+            self._load_error = f"No GT CSVs found for day '{self.day}' in {self.csv_dir}"
             logger.error(self._load_error)
             self._loaded = True
             return
 
-        if skipped > 0:
-            logger.warning(f"  Skipped {skipped:,} rows with missing Flow ID")
+        if skipped_ref[0] > 0:
+            logger.warning(f"  Skipped {skipped_ref[0]:,} rows with missing Flow ID")
 
         logger.info(
-            f"  Ground truth loaded: {self._total_rows:,} rows, "
+            f"  Ground truth loaded ({self.day}): {self._total_rows:,} rows, "
             f"{self._attack_count:,} attack rows, {self._benign_count:,} benign rows"
         )
         logger.info(f"  Flow lookup table built: {len(self._flow_data):,} unique flow IDs")
@@ -159,10 +206,11 @@ class GroundTruthLoader:
         if not _is_valid_ip(src_ip) or not _is_valid_ip(dst_ip):
             return None
 
-        if src_port == 0 or dst_port == 0:
-            return None
-
         proto_num = PROTO_MAP.get(proto_str.upper(), 0)
+
+        # ICMP has no ports (type/code appear as 0) — skip port filter
+        if proto_num != 1 and (src_port == 0 or dst_port == 0):
+            return None
         if proto_num == 0:
             return None
 
@@ -235,17 +283,22 @@ class GroundTruthLoader:
         }
 
 
-def get_ground_truth_loader(csv_dir: Path | None = None) -> GroundTruthLoader:
-    return GroundTruthLoader.get_instance(csv_dir)
+def get_ground_truth_loader(day: str = "wednesday", csv_dir: Path | None = None) -> GroundTruthLoader:
+    return GroundTruthLoader.get_instance(day, csv_dir)
+
+
+def get_ground_truth_loader_for_pcap(pcap_path: str, csv_dir: Path | None = None) -> GroundTruthLoader:
+    return GroundTruthLoader.get_instance_for_pcap(pcap_path, csv_dir)
 
 
 def extract_flow_ids_from_alert_csv(
     alert_path: Path,
+    gid_filter: set[int] | None = None,
 ) -> tuple[set[str], int, int]:
     """Extract unique flow IDs from a Snort alert_csv.txt file.
 
+    gid_filter: if provided, only include lines where GID is in this set.
     Returns (flow_ids, total_lines, filtered_lines).
-    Uses the EXACT same logic as xgb_flowid_confusion_wednesday.py.
     """
     flow_ids: set[str] = set()
     total = 0
@@ -263,11 +316,22 @@ def extract_flow_ids_from_alert_csv(
             total += 1
 
             parts = line.split(",")
-            if len(parts) < 8:
+            if len(parts) < 9:
                 filtered += 1
                 continue
 
             try:
+                # GID filter check — field 8 is gid:sid:rev
+                if gid_filter is not None:
+                    gid_str = parts[8].strip().split(":")[0]
+                    try:
+                        if int(gid_str) not in gid_filter:
+                            filtered += 1
+                            continue
+                    except ValueError:
+                        filtered += 1
+                        continue
+
                 proto_str = parts[2].strip()
 
                 src_field = parts[6].strip()

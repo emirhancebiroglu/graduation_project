@@ -8,8 +8,12 @@ from pydantic import BaseModel, Field
 
 
 class Engine(str, Enum):
-    xgboost = "xgboost"
-    community = "community"
+    xgboost = "xgboost"       # GID:301 dos_inspector
+    community = "community"   # GID:1   community rules
+    portscan = "portscan"     # GID:302 portscan_inspector
+    dos_agg = "dos_agg"       # GID:303 dos_aggregator
+    bot = "bot"               # GID:306 bot_client_inspector
+    bruteforce = "bruteforce" # GID:307 bruteforce_inspector
 
 
 class PcapName(str, Enum):
@@ -43,6 +47,8 @@ class Alert(BaseModel):
     if_score: float | None = None    # IsolationForest anomaly score (more negative = more anomalous)
     if_label: str | None = None      # "anomaly_candidate" | "known_pattern" | None
     raw_features: list[float] | None = None  # 15 raw feature values for SHAP explain (v3b schema, not sent to frontend)
+    mitre_technique: str | None = None  # e.g. "T1499"
+    mitre_tactic: str | None = None     # e.g. "TA0040"
 
 
 # ── Metrics ──────────────────────────────────────────────────────────────────

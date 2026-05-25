@@ -26,7 +26,7 @@ from models import (
     WsStatusMessage,
 )
 from alert_tailer import AlertTailer
-from ground_truth import get_ground_truth_loader
+from ground_truth import get_ground_truth_loader, get_ground_truth_loader_for_pcap
 from snort_runner import AlreadyRunningError, SnortRunner
 
 logging.basicConfig(
@@ -65,6 +65,11 @@ _FROZEN_CONFIG: dict[str, Any] = {
         "F1": 0.9856,
         "FPR": 0.0168,
     },
+    # Community Snort3 rules baseline (CIC Wednesday replay — fixed reference)
+    "community_baseline": {
+        "FP": 36633,
+        "fp_gap": 29240,  # community FP - xgb FP (36633 - 7393)
+    },
 }
 
 # ── Connection manager ────────────────────────────────────────────────────────
@@ -97,7 +102,7 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 runner = SnortRunner()
-_gt_loader = get_ground_truth_loader()
+_gt_loader = get_ground_truth_loader()  # default wednesday; swapped on replay start
 
 # Active tailer tasks — cancelled when replay stops
 _tailer_tasks: list[asyncio.Task] = []
@@ -125,14 +130,18 @@ async def _compute_and_broadcast_evaluation(run_dir: Path) -> None:
     stats = _gt_loader.stats()
     total_flows = stats["total"]
 
+    combined_path = run_dir / "combined" / "alert_csv.txt"
+
     results = {}
-    for engine, subdir in [("xgboost", "xgboost"), ("community", "community")]:
-        alert_path = run_dir / subdir / "alert_csv.txt"
+    # xgboost evaluation: GID:301 (dos_inspector) flows only
+    # community evaluation: GID:1 (community rules) flows only
+    for engine, gid_set in [("xgboost", {301}), ("community", {1})]:
+        alert_path = combined_path
         if not alert_path.exists():
-            logger.warning("Alert CSV not found for %s: %s", engine, alert_path)
+            logger.warning("Combined alert CSV not found: %s", alert_path)
             continue
 
-        flow_ids, _, _ = extract_flow_ids_from_alert_csv(alert_path)
+        flow_ids, _, _ = extract_flow_ids_from_alert_csv(alert_path, gid_filter=gid_set)
         conf = _gt_loader.compute_confusion(flow_ids)
 
         if "error" in conf:
@@ -187,12 +196,12 @@ _xgb_alert_seq: int = 0
 _xgb_log_features: list[list[float]] = []  # populated by log tailer
 
 
-def _parse_log_features(line: str) -> list[float] | None:
-    """Extract raw feature vector from dos_inspector LogMessage line.
+def _parse_log_entry(line: str) -> tuple[list[float], float | None] | None:
+    """Extract (feature_vector, score) from dos_inspector LogMessage line.
 
-    v3b format (15 features, swin/dwin removed):
-      [dos_inspector] s1-high pkts=8 score=0.9902 | dur=0.0000 sp=2 dp=0 sb=116 db=0 smsz=58 dmsz=0 si=0.0479 di=0.0000 fwd=58 bwd=0 fin=0 ack=2 syn=1 biat=0.0 sid=1
-    Returns 15 floats or None.
+    v3b format:
+      [dos_inspector] s1-high pkts=8 score=0.9902 | dur=0.0000 sp=2 dp=0 ...
+    Returns (features, score) or None if line is not a dos_inspector entry.
     """
     if "[dos_inspector]" not in line or "sid=" not in line:
         return None
@@ -202,24 +211,33 @@ def _parse_log_features(line: str) -> list[float] | None:
             start = idx + len(key) + 1
             end = line.find(" ", start)
             return float(line[start:] if end == -1 else line[start:end])
-        return [
+
+        score: float | None = None
+        if "score=" in line:
+            try:
+                score = _val("score")
+            except (ValueError, IndexError):
+                pass
+
+        features = [
             _val("dur"), _val("sp"), _val("dp"),
             _val("sb"), _val("db"), _val("smsz"), _val("dmsz"),
             _val("si"), _val("di"),
             _val("fwd"), _val("bwd"),
             _val("fin"), _val("ack"), _val("syn"), _val("biat"),
         ]
+        return (features, score)
     except (ValueError, IndexError):
         return None
 
 
-def _read_next_log_feature(run_dir: Path, alert_idx: int) -> list[float] | None:
-    """Read the Nth feature vector from snort_stdout.log (0-indexed, matching alert_csv order).
+def _read_next_log_entry(run_dir: Path, alert_idx: int) -> tuple[list[float], float | None] | None:
+    """Read the Nth (features, score) from snort_stdout.log (0-indexed).
 
     Retries briefly since Snort may still be writing when first alert arrives.
     """
     import time
-    log_path = run_dir / "xgboost" / "snort_stdout.log"
+    log_path = run_dir / "combined" / "snort_stdout.log"
     for attempt in range(10):
         if not log_path.exists():
             time.sleep(0.2)
@@ -228,12 +246,11 @@ def _read_next_log_feature(run_dir: Path, alert_idx: int) -> list[float] | None:
             count = 0
             with open(log_path) as f:
                 for line in f:
-                    fv = _parse_log_features(line)
-                    if fv is not None:
+                    entry = _parse_log_entry(line)
+                    if entry is not None:
                         if count == alert_idx:
-                            return fv
+                            return entry
                         count += 1
-            # Entry not yet written — wait briefly and retry
             if count <= alert_idx:
                 time.sleep(0.2)
                 continue
@@ -254,9 +271,12 @@ async def ingest_alert(alert: Alert) -> None:
 
     # IF + SHAP enrichment for XGBoost alerts only
     if alert.engine == Engine.xgboost and _current_run_dir is not None:
-        fv = await asyncio.to_thread(_read_next_log_feature, _current_run_dir, _xgb_alert_seq)
-        if fv is not None:
+        entry = await asyncio.to_thread(_read_next_log_entry, _current_run_dir, _xgb_alert_seq)
+        if entry is not None:
+            fv, score = entry
             alert.raw_features = fv
+            if score is not None:
+                alert.score = score
             if _IF_AVAILABLE:
                 try:
                     result = await asyncio.to_thread(_if_score, fv)
@@ -272,6 +292,8 @@ async def ingest_alert(alert: Alert) -> None:
     if len(_history) > _HISTORY_MAX:
         _history.pop(0)
 
+    if alert.engine not in _counters:
+        _counters[alert.engine] = {"total": 0, "unique_src": set(), "flows": 0}
     c = _counters[alert.engine]
     c["total"] += 1
     c["unique_src"].add(alert.src_ip)
@@ -283,7 +305,7 @@ async def ingest_alert(alert: Alert) -> None:
 
 
 def _start_tailers(run_dir: str, run_id: str) -> None:
-    """Create and register two AlertTailer tasks for a run directory."""
+    """Create and register one AlertTailer task for the combined run directory."""
     global _tailer_tasks, _current_run_dir, _active_run_id, _xgb_alert_seq, _xgb_log_features
     _cancel_tailers()
     _current_run_dir = Path(run_dir)
@@ -291,12 +313,12 @@ def _start_tailers(run_dir: str, run_id: str) -> None:
     _xgb_alert_seq = 0
     _xgb_log_features = []
 
-    for engine, subdir in [(Engine.xgboost, "xgboost"), (Engine.community, "community")]:
-        path = Path(run_dir) / subdir / "alert_csv.txt"
-        tailer = AlertTailer(path, engine, ingest_alert)
-        task = asyncio.create_task(tailer.run(), name=f"tailer-{subdir}")
-        _tailer_tasks.append(task)
-    logger.info("Alert tailers started for run_dir=%s", run_dir)
+    # Combined mode: single alert_csv.txt, engine resolved per-alert by GID
+    path = Path(run_dir) / "combined" / "alert_csv.txt"
+    tailer = AlertTailer(path, None, ingest_alert)
+    task = asyncio.create_task(tailer.run(), name="tailer-combined")
+    _tailer_tasks.append(task)
+    logger.info("Alert tailer started for run_dir=%s (combined)", run_dir)
 
 
 def _cancel_tailers() -> None:
@@ -317,7 +339,7 @@ async def _status_broadcaster() -> None:
         is_this_run = state is not None and state.run_id == _active_run_id
 
         if is_this_run and runner.check_natural_exit():
-            logger.info("Both Snort processes exited (run_id=%s)", state.run_id)
+            logger.info("Snort process exited (run_id=%s)", state.run_id)
             await _force_evaluation()
             continue
 
@@ -331,16 +353,13 @@ async def _status_broadcaster() -> None:
         await manager.broadcast(msg.model_dump_json())
 
         if _current_run_dir is not None and is_this_run:
-            xgb_count = await asyncio.to_thread(
-                _count_alert_lines, _current_run_dir / "xgboost" / "alert_csv.txt"
-            )
-            comm_count = await asyncio.to_thread(
-                _count_alert_lines, _current_run_dir / "community" / "alert_csv.txt"
+            combined_count = await asyncio.to_thread(
+                _count_alert_lines, _current_run_dir / "combined" / "alert_csv.txt"
             )
             counts_msg = WsAlertCountsMessage(
                 data=AlertCountsPayload(
-                    xgboost_file_count=xgb_count,
-                    community_file_count=comm_count,
+                    xgboost_file_count=combined_count,
+                    community_file_count=0,
                 )
             )
             await manager.broadcast(counts_msg.model_dump_json())
@@ -420,9 +439,13 @@ async def history() -> list[Alert]:
 
 @app.post("/api/replay/start", response_model=ReplayStartResponse)
 async def replay_start(body: ReplayRequest) -> ReplayStartResponse:
+    global _gt_loader
     pcap_path = _PCAP_DIR / f"{body.pcap.value}.pcap"
     if not pcap_path.exists():
         raise HTTPException(status_code=400, detail=f"PCAP not found: {pcap_path}")
+
+    _gt_loader = get_ground_truth_loader_for_pcap(body.pcap.value)
+    _gt_loader.ensure_loaded()
 
     async def _on_launched(run_dir: str) -> None:
         global _history
@@ -458,7 +481,7 @@ async def replay_start(body: ReplayRequest) -> ReplayStartResponse:
 
 
 @app.get("/api/explain/{alert_id}")
-async def explain_alert(alert_id: str) -> list[dict]:
+async def explain_alert(alert_id: str) -> dict:
     alert = next((a for a in _history if a.id == alert_id), None)
     if alert is None:
         raise HTTPException(status_code=404, detail="Alert not found in history")
@@ -467,9 +490,10 @@ async def explain_alert(alert_id: str) -> list[dict]:
     if alert.raw_features is None:
         raise HTTPException(status_code=400, detail="Feature vector not available for this alert")
     try:
-        from shap_explain_alert import explain as _shap_explain
-        result = await asyncio.to_thread(_shap_explain, alert.raw_features)
-        return result
+        from shap_explain_alert import explain as _shap_explain, shap_to_narrative as _narrative
+        contributions = await asyncio.to_thread(_shap_explain, alert.raw_features)
+        narrative = _narrative(contributions)
+        return {"contributions": contributions, "narrative": narrative}
     except Exception as exc:
         logger.error("SHAP explain error (alert_id=%s): %s", alert_id, exc)
         raise HTTPException(status_code=500, detail=f"SHAP error: {exc}")

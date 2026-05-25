@@ -18,9 +18,8 @@ logger = logging.getLogger("snort-runner")
 
 _HOME = Path.home()
 _SNORT_CWD = "/usr/local/etc/snort"
-_XGB_CONFIG = str(_HOME / "bitirme/configs/snort_dos.lua")
-_XGB_PLUGIN = str(_HOME / "bitirme/plugins/dos_inspector/build")
-_COMMUNITY_CONFIG = str(_HOME / "bitirme/configs/snort_community.lua")
+_COMBINED_CONFIG = str(_HOME / "bitirme/configs/snort_combined.lua")
+_COMBINED_PLUGIN = str(_HOME / "bitirme/plugins/combined_plugins")
 _RUN_ROOT = Path("/tmp/demo-runs")
 
 # PCAP duration fallbacks (seconds) used when capinfos is unavailable
@@ -81,8 +80,7 @@ def _get_pcap_duration(pcap_path: str, pcap_name: str) -> float:
 class SnortRunner:
     def __init__(self) -> None:
         self._state: RunState | None = None
-        self._xgb_proc: subprocess.Popen | None = None
-        self._comm_proc: subprocess.Popen | None = None
+        self._proc: subprocess.Popen | None = None
         self._log_handles: list = []
 
     # ── public interface ──────────────────────────────────────────────────────
@@ -115,8 +113,11 @@ class SnortRunner:
         duration = await asyncio.to_thread(_get_pcap_duration, pcap_path, pcap_name)
 
         run_dir = _RUN_ROOT / run_id
+        combined_dir = run_dir / "combined"
+        # Legacy paths kept so alert_tailer and main.py can find files
         xgb_dir = run_dir / "xgboost"
         comm_dir = run_dir / "community"
+        combined_dir.mkdir(parents=True, exist_ok=True)
         xgb_dir.mkdir(parents=True, exist_ok=True)
         comm_dir.mkdir(parents=True, exist_ok=True)
 
@@ -131,9 +132,7 @@ class SnortRunner:
         )
 
         try:
-            self._xgb_proc, self._comm_proc = self._launch_both(
-                pcap_path, str(xgb_dir), str(comm_dir)
-            )
+            self._proc = self._launch_combined(pcap_path, str(combined_dir))
         except Exception as exc:
             self._state.status = RunStatus.errored
             self._state.error = f"Failed to launch Snort: {exc}"
@@ -159,55 +158,29 @@ class SnortRunner:
         if self._state.status != RunStatus.running:
             return self._state
 
-        bad: list[str] = []
-        for proc, name in [(self._xgb_proc, "xgboost"), (self._comm_proc, "community")]:
-            if proc is None:
-                continue
-            rc = proc.poll()
+        if self._proc is not None:
+            rc = self._proc.poll()
             if rc is not None and rc != 0:
-                bad.append(f"{name} (exit {rc})")
-
-        if bad:
-            self._state.status = RunStatus.errored
-            self._state.error = f"Subprocess exited with error: {', '.join(bad)}"
-            logger.error("Launch error: %s", self._state.error)
-            await self.stop()
+                self._state.status = RunStatus.errored
+                self._state.error = f"Snort exited with error (exit {rc})"
+                logger.error("Launch error: %s", self._state.error)
+                await self.stop()
 
         return self._state
 
     async def stop(self) -> None:
-        for proc, name in [
-            (self._xgb_proc, "xgboost"),
-            (self._comm_proc, "community"),
-        ]:
-            if proc is None:
-                continue
-            if proc.poll() is None:
-                logger.info("Sending SIGTERM to %s (pid=%d)", name, proc.pid)
-                proc.terminate()
-
-        # Wait up to 3s for graceful exit
-        deadline = asyncio.get_event_loop().time() + 3.0
-        for proc, name in [
-            (self._xgb_proc, "xgboost"),
-            (self._comm_proc, "community"),
-        ]:
-            if proc is None:
-                continue
-            remaining = deadline - asyncio.get_event_loop().time()
-            if remaining > 0:
-                try:
-                    await asyncio.wait_for(
-                        asyncio.to_thread(proc.wait), timeout=remaining
-                    )
-                except asyncio.TimeoutError:
-                    logger.warning("%s did not exit; sending SIGKILL", name)
-                    proc.kill()
-                    await asyncio.to_thread(proc.wait)
+        if self._proc is not None and self._proc.poll() is None:
+            logger.info("Sending SIGTERM to snort (pid=%d)", self._proc.pid)
+            self._proc.terminate()
+            try:
+                await asyncio.wait_for(asyncio.to_thread(self._proc.wait), timeout=3.0)
+            except asyncio.TimeoutError:
+                logger.warning("snort did not exit; sending SIGKILL")
+                self._proc.kill()
+                await asyncio.to_thread(self._proc.wait)
 
         self._close_log_handles()
-        self._xgb_proc = None
-        self._comm_proc = None
+        self._proc = None
 
         if self._state and self._state.status == RunStatus.running:
             self._state.status = RunStatus.stopped
@@ -220,67 +193,40 @@ class SnortRunner:
             logger.warning("cleanup error (ignored): %s", exc)
 
     def check_natural_exit(self) -> bool:
-        """Return True if both processes have exited naturally (PCAP fully replayed)."""
-        if self._xgb_proc is None and self._comm_proc is None:
+        """Return True if the combined process has exited naturally (PCAP fully replayed)."""
+        if self._proc is None:
             return False
-        xgb_done = self._xgb_proc is None or self._xgb_proc.poll() is not None
-        comm_done = self._comm_proc is None or self._comm_proc.poll() is not None
-        return xgb_done and comm_done
+        return self._proc.poll() is not None
 
     # ── private ───────────────────────────────────────────────────────────────
 
-    def _launch_both(
-        self, pcap_path: str, xgb_dir: str, comm_dir: str
-    ) -> tuple[subprocess.Popen, subprocess.Popen]:
-        xgb_env = _xgboost_env()
+    def _launch_combined(self, pcap_path: str, out_dir: str) -> subprocess.Popen:
+        env = _xgboost_env()
 
-        xgb_stdout = open(f"{xgb_dir}/snort_stdout.log", "wb")
-        xgb_stderr = open(f"{xgb_dir}/snort_stderr.log", "wb")
-        comm_stdout = open(f"{comm_dir}/snort_stdout.log", "wb")
-        comm_stderr = open(f"{comm_dir}/snort_stderr.log", "wb")
-        self._log_handles = [xgb_stdout, xgb_stderr, comm_stdout, comm_stderr]
+        stdout_fh = open(f"{out_dir}/snort_stdout.log", "wb")
+        stderr_fh = open(f"{out_dir}/snort_stderr.log", "wb")
+        self._log_handles = [stdout_fh, stderr_fh]
 
-        cmd_xgb = [
+        cmd = [
             "snort",
-            "-c", _XGB_CONFIG,
-            "--plugin-path", _XGB_PLUGIN,
+            "-c", _COMBINED_CONFIG,
+            "--plugin-path", _COMBINED_PLUGIN,
             "-r", pcap_path,
             "-A", "alert_csv",
-            "-l", xgb_dir,
+            "-l", out_dir,
             "--warn-all",
         ]
-        cmd_community = [
-            "snort",
-            "-c", _COMMUNITY_CONFIG,
-            "-r", pcap_path,
-            "-A", "alert_csv",
-            "-l", comm_dir,
-            "--warn-all", "-q",
-        ]
 
-        logger.info("Launching XGBoost Snort: %s", " ".join(cmd_xgb))
-        xgb_proc = subprocess.Popen(
-            cmd_xgb,
+        logger.info("Launching combined Snort: %s", " ".join(cmd))
+        proc = subprocess.Popen(
+            cmd,
             cwd=_SNORT_CWD,
-            env=xgb_env,
-            stdout=xgb_stdout,
-            stderr=xgb_stderr,
+            env=env,
+            stdout=stdout_fh,
+            stderr=stderr_fh,
         )
-
-        logger.info("Launching Community Snort: %s", " ".join(cmd_community))
-        comm_proc = subprocess.Popen(
-            cmd_community,
-            cwd=_SNORT_CWD,
-            stdout=comm_stdout,
-            stderr=comm_stderr,
-        )
-
-        logger.info(
-            "Both processes launched (xgb pid=%d, comm pid=%d)",
-            xgb_proc.pid,
-            comm_proc.pid,
-        )
-        return xgb_proc, comm_proc
+        logger.info("Combined Snort launched (pid=%d)", proc.pid)
+        return proc
 
     def _close_log_handles(self) -> None:
         for fh in self._log_handles:

@@ -52,8 +52,8 @@ struct DdsAggProfile {
         raw[0] = tf;
         raw[1] = static_cast<double>(syn_src_ips.size());
         raw[2] = static_cast<double>(syn_src_ports.size());
-        raw[3] = 0.0;  // entropy placeholder
-        raw[4] = 0.0;  // port range placeholder
+        raw[3] = (syn_src_ips.size() > 0) ? static_cast<double>(syn_src_ports.size()) / syn_src_ips.size() : 0.0;  // ports per src
+        raw[4] = 0.0;  // reserved placeholder
         raw[5] = tf > 0 ? static_cast<double>(syn_src_ips.size()) / tf : 0.0;
         raw[6] = window_sec > 0 ? tf / window_sec : 0.0;
     }

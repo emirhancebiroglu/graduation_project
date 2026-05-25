@@ -1,13 +1,18 @@
 "use client";
-import type { EvaluationResult, Alert } from "@/lib/types";
+import type { EvaluationResult } from "@/lib/types";
 import type { ReplayPhase } from "@/lib/use-ids-stream";
-import { motion } from "framer-motion";
+
+type FrozenMetrics = {
+  xgb_FP: number;
+  community_FP: number;
+  fp_gap: number;
+};
 
 type Props = {
   evaluation: EvaluationResult | null;
   replayPhase: ReplayPhase;
   pcapProgress: number;
-  recentAlerts: Alert[];
+  frozenMetrics?: FrozenMetrics | null;
 };
 
 function fmtN(n: number): string {
@@ -18,7 +23,7 @@ function FpBar({ label, value, max, color }: { label: string; value: number; max
   const pct = Math.min((value / max) * 100, 100);
   return (
     <div className="flex items-center gap-3">
-      <span className="text-[10px] font-mono w-20 shrink-0" style={{ color: "rgba(100,116,139,0.7)" }}>{label}</span>
+      <span className="text-[10px] font-mono w-20 shrink-0" style={{ color: "rgba(148,163,184,0.9)" }}>{label}</span>
       <div className="flex-1 h-3 rounded-sm overflow-hidden" style={{ background: "rgba(0,212,255,0.06)" }}>
         <div style={{ width: `${pct}%`, height: "100%", background: color, boxShadow: `0 0 8px ${color}40`, transition: "width 0.8s ease" }} />
       </div>
@@ -27,46 +32,10 @@ function FpBar({ label, value, max, color }: { label: string; value: number; max
   );
 }
 
-function RealAlertTerminal({ alerts }: { alerts: Alert[] }) {
-  const display = alerts.length > 0 ? alerts.slice(-8) : [];
-
-  return (
-    <div
-      className="font-mono text-[9px] leading-relaxed space-y-0.5"
-      style={{ color: "rgba(0,212,255,0.55)" }}
-    >
-      {display.length === 0 ? (
-        <div style={{ color: "rgba(100,116,139,0.4)" }}>Awaiting detection data...</div>
-      ) : (
-        display.map((alert, displayIdx) => {
-          const shortMsg = alert.msg && alert.msg.length > 22
-            ? alert.msg.slice(0, 22) + "…"
-            : (alert.msg ?? "—");
-          const conf = alert.score != null ? alert.score.toFixed(2) : "—";
-          return (
-            <motion.div
-              key={alerts.length - 8 + displayIdx}
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-              className="flex gap-2"
-            >
-              <span style={{ color: "rgba(0,212,255,0.3)" }}>[{alert.ts.slice(11, 19)}]</span>
-              <span style={{ color: "rgba(100,116,139,0.7)" }}>{alert.src_ip}:{alert.src_port} &gt; {alert.dst_ip}:{alert.dst_port}</span>
-              <span style={{ color: "#ff3b3b" }}>{shortMsg}</span>
-              <span style={{ color: "#10b981" }}>{alert.proto}</span>
-              {alert.score != null && (
-                <span style={{ color: "#f59e0b" }}>({conf})</span>
-              )}
-            </motion.div>
-          );
-        })
-      )}
-    </div>
-  );
-}
-
-export function ImpactSummary({ evaluation, replayPhase, pcapProgress, recentAlerts }: Props) {
+export function ImpactSummary({ evaluation, replayPhase, pcapProgress, frozenMetrics }: Props) {
+  const xgbFP = frozenMetrics?.xgb_FP ?? 7393;
+  const commFP = frozenMetrics?.community_FP ?? 36633;
+  const fpGapBaseline = frozenMetrics?.fp_gap ?? (commFP - xgbFP);
   const isIdle = !evaluation;
   const isRunning = replayPhase === "running";
 
@@ -103,9 +72,9 @@ export function ImpactSummary({ evaluation, replayPhase, pcapProgress, recentAle
             <p className="section-label text-[10px] skel" style={{ color: "rgba(0,212,255,0.2)" }}>
               FALSE ALARM COMPARISON
             </p>
-            {[["XGBoost","#64748b"],["Community","#ff3b3b"]].map(([label, color]) => (
+            {[["ML Ensemble","#64748b"],["Community","#ff3b3b"]].map(([label, color]) => (
               <div key={label as string} className="flex items-center gap-3 skel">
-                <span className="text-[10px] font-mono w-20 shrink-0" style={{ color: "rgba(100,116,139,0.4)" }}>{label as string}</span>
+                <span className="text-[10px] font-mono w-20 shrink-0" style={{ color: "rgba(148,163,184,0.65)" }}>{label as string}</span>
                 <div className="flex-1 h-3 rounded-sm skel" style={{ background: "rgba(0,212,255,0.06)" }} />
                 <span className="text-xs font-mono font-semibold tabular-nums w-16 text-right" style={{ color }}>---</span>
               </div>
@@ -117,7 +86,7 @@ export function ImpactSummary({ evaluation, replayPhase, pcapProgress, recentAle
               <div key={label as string} className="text-center py-3 rounded-sm"
                 style={{ background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.08)" }}>
                 <p className="text-lg font-bold font-mono tabular-nums" style={{ color: color as string, opacity: 0.4 }}>--%</p>
-                <p className="text-[9px] font-mono mt-0.5" style={{ color: "rgba(100,116,139,0.3)" }}>{label as string}</p>
+                <p className="text-[9px] font-mono mt-0.5" style={{ color: "rgba(148,163,184,0.5)" }}>{label as string}</p>
               </div>
             ))}
           </div>
@@ -127,10 +96,10 @@ export function ImpactSummary({ evaluation, replayPhase, pcapProgress, recentAle
   }
 
   if (isRunning) {
-    const liveFpGap = Math.round(43664 * pcapProgress);
-    const liveXgbFp = Math.round(7679 * pcapProgress);
-    const liveCommFp = Math.round(51343 * pcapProgress);
-    const liveAnalystHrs = Math.round((43664 * pcapProgress) * 3 / 60);
+    const liveFpGap = Math.round(fpGapBaseline * pcapProgress);
+    const liveXgbFp = Math.round(xgbFP * pcapProgress);
+    const liveCommFp = Math.round(commFP * pcapProgress);
+    const liveAnalystHrs = Math.round((fpGapBaseline * pcapProgress) * 3 / 60);
 
     return (
       <div className="relative overflow-hidden" style={{ border: "1px solid rgba(245,158,11,0.15)", background: "#0f1318" }}>
@@ -153,8 +122,8 @@ export function ImpactSummary({ evaluation, replayPhase, pcapProgress, recentAle
             <p className="text-4xl font-bold tabular-nums leading-none" style={{ color: "#f59e0b", letterSpacing: "-0.03em", textShadow: "0 0 20px rgba(245,158,11,0.3)" }}>
               ~{liveAnalystHrs.toLocaleString("en-US")}h
             </p>
-            <p className="text-[10px] font-mono mt-2" style={{ color: "rgba(100,116,139,0.6)" }}>
-              Equivalent to ~{Math.round((43664 * pcapProgress) * 3 / 60 / 8)} working days saved (assuming 3 min/alert, 8h/day)
+            <p className="text-[10px] font-mono mt-2" style={{ color: "rgba(148,163,184,0.85)" }}>
+              Equivalent to ~{Math.round((fpGapBaseline * pcapProgress) * 3 / 60 / 8)} working days saved (assuming 3 min/alert, 8h/day)
             </p>
           </div>
 
@@ -163,8 +132,8 @@ export function ImpactSummary({ evaluation, replayPhase, pcapProgress, recentAle
               FALSE ALARM COMPARISON
             </p>
             <div className="space-y-2">
-              <FpBar label="XGBoost" value={liveXgbFp} max={51343} color="#64748b" />
-              <FpBar label="Community" value={liveCommFp} max={51343} color="#ff3b3b" />
+              <FpBar label="ML Ensemble" value={liveXgbFp} max={commFP} color="#64748b" />
+              <FpBar label="Community" value={liveCommFp} max={commFP} color="#ff3b3b" />
             </div>
             <div className="text-right pt-1">
               <span className="text-xs font-mono font-semibold" style={{ color: "#10b981" }}>
@@ -173,14 +142,6 @@ export function ImpactSummary({ evaluation, replayPhase, pcapProgress, recentAle
             </div>
           </div>
 
-          <div className="pt-2 border-t" style={{ borderColor: "rgba(245,158,11,0.08)" }}>
-            <p className="section-label text-[10px] mb-2" style={{ color: "rgba(0,212,255,0.25)" }}>
-              THREAT DETECTION LOG ({recentAlerts.length} events)
-            </p>
-            <div className="p-3 rounded-sm overflow-hidden" style={{ background: "rgba(0,0,0,0.3)", border: "1px solid rgba(0,212,255,0.06)" }}>
-              <RealAlertTerminal alerts={recentAlerts} />
-            </div>
-          </div>
         </div>
       </div>
     );
@@ -215,7 +176,7 @@ export function ImpactSummary({ evaluation, replayPhase, pcapProgress, recentAle
 <p className="text-4xl font-bold tabular-nums leading-none" style={{ color: "#f59e0b", letterSpacing: "-0.03em", textShadow: "0 0 20px rgba(245,158,11,0.3)" }}>
               ~{analystHrs.toLocaleString("en-US")}h
             </p>
-            <p className="text-[10px] font-mono mt-2" style={{ color: "rgba(100,116,139,0.6)" }}>
+            <p className="text-[10px] font-mono mt-2" style={{ color: "rgba(148,163,184,0.85)" }}>
               Equivalent to ~{Math.round(fpGap * 3 / 60 / 8)} working days saved (assuming 3 min/alert, 8h/day)
             </p>
         </div>
@@ -225,7 +186,7 @@ export function ImpactSummary({ evaluation, replayPhase, pcapProgress, recentAle
             FALSE ALARM COMPARISON
           </p>
           <div className="space-y-2">
-            <FpBar label="XGBoost" value={xgb.FP} max={comm.FP} color="#64748b" />
+            <FpBar label="ML Ensemble" value={xgb.FP} max={comm.FP} color="#64748b" />
             <FpBar label="Community" value={comm.FP} max={comm.FP} color="#ff3b3b" />
           </div>
           <div className="text-right pt-1">
@@ -238,11 +199,11 @@ export function ImpactSummary({ evaluation, replayPhase, pcapProgress, recentAle
         <div className="grid grid-cols-2 gap-3 pt-2 border-t" style={{ borderColor: "rgba(245,158,11,0.08)" }}>
           <div className="text-center py-3 rounded-sm" style={{ background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.15)" }}>
             <p className="text-lg font-bold font-mono tabular-nums" style={{ color: "#10b981" }}>{(xgb.accuracy * 100).toFixed(2)}%</p>
-            <p className="text-[9px] font-mono mt-0.5" style={{ color: "rgba(100,116,139,0.5)" }}>XGB ACCURACY</p>
+            <p className="text-[9px] font-mono mt-0.5" style={{ color: "rgba(148,163,184,0.75)" }}>XGB ACCURACY</p>
           </div>
           <div className="text-center py-3 rounded-sm" style={{ background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.1)" }}>
             <p className="text-lg font-bold font-mono tabular-nums" style={{ color: "#00d4ff" }}>{(xgb.recall * 100).toFixed(2)}%</p>
-            <p className="text-[9px] font-mono mt-0.5" style={{ color: "rgba(100,116,139,0.5)" }}>XGB RECALL</p>
+            <p className="text-[9px] font-mono mt-0.5" style={{ color: "rgba(148,163,184,0.75)" }}>XGB RECALL</p>
           </div>
         </div>
       </div>

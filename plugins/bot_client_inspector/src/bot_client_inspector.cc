@@ -28,17 +28,25 @@ static inline uint32_t gdip(snort::Packet* p) {
     if (!p) return 0; auto* ip = p->ptrs.ip_api.get_dst();
     return (ip && ip->is_ip4()) ? ntohl(ip->get_ip4_value()) : 0;
 }
+// Only track RFC1918 internal IPs as potential bot clients
+static inline bool is_private_ip(uint32_t ip) {
+    return ((ip & 0xFF000000) == 0x0A000000) ||   // 10.0.0.0/8
+           ((ip & 0xFFF00000) == 0xAC100000) ||   // 172.16.0.0/12
+           ((ip & 0xFFFF0000) == 0xC0A80000);      // 192.168.0.0/16
+}
 
 // AGG_SCALER_PARAMS_BEGIN
 BclScalerParams g_scaler = {
-    { 3, 2, 2, 0.999996, 0.918296, 0.333333, 0.01,
-      0.666667, 0.384615, 0.918296, 0, 0.666667, 1, 0.666667,
-      0.926471, 12.6, 0.066667, 0,
-      1966, 0.666667, 4.5, 28960 },
-    { 3, 2, 1, 0.45275075, 0.918296, 0.366667, 0.01,
-      0.6, 0.333334, 1.584963, 980.34153375, 0.333334, 0.333333, 0.208333,
-      0.094721, 20.333333, 0.333333, 1,
-      3212.658334, 1.333334, 7.11666675, 21008 }
+    { 1.3862943611, 1.0986122887, 1.0986122887, 0.6931446806, 0.6514372920,
+      0.2876818225, 0.0099503309, 0.5108258238, 0.3364722366, 0.6514372920,
+      0.0000000000, 0.5108258238, 0.6931471806, 0.5108258238, 0.6547301044,
+      2.5852546487, 0.0000000000, 0.0000000000, 7.6095317727, 0.5108258238,
+      1.6094379124, 10.2737053763 },
+    { 0.8109302162, 0.6931471806, 0.4054651081, 0.2918230646, 0.6514372920,
+      0.2876822725, 0.0163673021, 0.4054653581, 0.2231440013, 0.9497111945,
+      8.0586476891, 0.2231440013, 0.2876820725, 0.1177828357, 0.0569154484,
+      1.4328143654, 0.2876818225, 0.6097156100, 2.0050006437, 0.8964884787,
+      1.1700712871, 0.6854398830 }
 };
 // AGG_SCALER_PARAMS_END
 
@@ -142,8 +150,8 @@ public:
         if (src == 0 || dst == 0) return;
         uint16_t dp = p->ptrs.tcph->dst_port();
         
-        // Process SYN-only packets for profile tracking
-        if (p->ptrs.tcph->is_syn_only()) {
+        // Process SYN-only packets for profile tracking (internal IPs only)
+        if (p->ptrs.tcph->is_syn_only() && is_private_ip(src)) {
             auto it = profs.find(src);
             if (it == profs.end()) {
                 BclProfile pr; pr.reset(src, now);
@@ -274,6 +282,11 @@ private:
         else if (alert && hshake_ratio < 0.1 && score < 0.2 && pr.syn_count >= 3) {
             suppressed = true;
             suppress_reason = "no_handshake";
+        }
+        // Rule 5: Zero handshake AND negligible incoming bytes → SYN-only, no real data exchange
+        else if (alert && pr.handshake_count == 0 && pr.incoming_bytes < 10) {
+            suppressed = true;
+            suppress_reason = "no_data";
         }
         
         // ─── Alert dedup (30-minute cooldown per IP) ────────────────────

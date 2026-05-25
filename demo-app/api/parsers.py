@@ -9,6 +9,34 @@ from models import Alert, Engine, Proto
 
 logger = logging.getLogger("parsers")
 
+# GID → Engine routing
+_GID_ENGINE: dict[int, Engine] = {
+    301: Engine.xgboost,
+    302: Engine.portscan,
+    303: Engine.dos_agg,
+    306: Engine.bot,
+    307: Engine.bruteforce,
+    1:   Engine.community,
+}
+
+# MITRE ATT&CK mapping keyed by GID
+_MITRE_MAP: dict[int, tuple[str, str]] = {
+    301: ("T1499", "TA0040"),  # Endpoint Denial of Service
+    303: ("T1498", "TA0040"),  # Network Denial of Service
+    302: ("T1046", "TA0043"),  # Network Service Discovery
+    307: ("T1110", "TA0006"),  # Brute Force
+    306: ("T1071", "TA0011"),  # Application Layer Protocol (C2)
+    1:   ("T1190", "TA0001"),  # Exploit Public-Facing Application
+}
+
+_GID_MSG: dict[int, str] = {
+    301: "DoS detected (per-flow)",
+    302: "Port scan detected",
+    303: "DoS SYN flood detected",
+    306: "Bot client detected",
+    307: "Brute force detected",
+}
+
 # Snort alert_csv field indices (Snort 3, default alert_csv output)
 # timestamp, pkt_num, proto, service, pkt_len, direction, src_ip:port, dst_ip:port, gid:sid:rev, action
 _F_TS = 0
@@ -45,8 +73,13 @@ def _parse_proto(raw: str) -> Proto:
     return Proto.TCP  # default for unknown (eth, raw, etc.)
 
 
-def parse_alert_csv_line(line: str, engine: Engine) -> Optional[Alert]:
-    """Parse one Snort 3 alert_csv line into an Alert. Returns None on any parse failure."""
+def parse_alert_csv_line(line: str, engine: Engine | None = None) -> Optional[Alert]:
+    """Parse one Snort 3 alert_csv line into an Alert.
+
+    engine: if None, derived from GID via _GID_ENGINE (combined mode).
+            if provided, used as-is (legacy single-engine mode).
+    Returns None on any parse failure.
+    """
     line = line.strip()
     if not line:
         return None
@@ -75,6 +108,9 @@ def parse_alert_csv_line(line: str, engine: Engine) -> Optional[Alert]:
         logger.debug("non-int gid/sid: %s", parts[_F_GID_SID_REV])
         return None
 
+    # Resolve engine: GID-based routing in combined mode
+    resolved_engine = engine if engine is not None else _GID_ENGINE.get(gid, Engine.community)
+
     # Timestamp: Snort uses 'MM/DD-HH:MM:SS.ffffff' without year — use current year
     ts_raw = parts[_F_TS].strip()
     try:
@@ -85,17 +121,13 @@ def parse_alert_csv_line(line: str, engine: Engine) -> Optional[Alert]:
     except ValueError:
         ts_iso = datetime.now(timezone.utc).isoformat()
 
-    # Build msg from gid/sid (Option B — no score from csv)
-    msg = f"GID={gid} SID={sid}"
-    if engine == Engine.xgboost:
-        msg = f"XGBoost anomaly detected (sid={sid})"
-    else:
-        msg = f"Community rule {gid}:{sid}"
+    msg = _GID_MSG.get(gid, f"Community rule {gid}:{sid}")
 
+    mitre = _MITRE_MAP.get(gid)
     return Alert(
         id=str(uuid.uuid4()),
         ts=ts_iso,
-        engine=engine,
+        engine=resolved_engine,
         src_ip=src[0],
         src_port=src[1],
         dst_ip=dst[0],
@@ -104,5 +136,7 @@ def parse_alert_csv_line(line: str, engine: Engine) -> Optional[Alert]:
         gid=gid,
         sid=sid,
         msg=msg,
-        score=None,  # Option B: score added in task 11
+        score=None,
+        mitre_technique=mitre[0] if mitre else None,
+        mitre_tactic=mitre[1] if mitre else None,
     )

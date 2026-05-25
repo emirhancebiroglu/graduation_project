@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { AreaChart, Area, ResponsiveContainer, YAxis } from "recharts";
-import type { Alert, AlertCounts, Engine } from "@/lib/types";
+import type { Alert, AlertCounts, CoreEngine } from "@/lib/types";
 
 type CumulPoint = { t: number; count: number };
 
@@ -16,9 +16,9 @@ const MAX_HISTORY = 300;
 
 type Props = {
   alerts: Alert[];
-  metrics: Record<Engine, { total: number; alertsPerSec: number }>;
+  metrics: Record<CoreEngine, { total: number; alertsPerSec: number }>;
   replayStartedAt: number | null;
-  firstAlertAtByEngine: Record<Engine, number | null>;
+  firstAlertAtByEngine: Record<CoreEngine, number | null>;
   snortRunning: boolean;
   fileCounts: AlertCounts;
 };
@@ -58,9 +58,9 @@ function VerdictBar({ xgbFirst, commFirst, replayStart, xgbTotal, commTotal, sno
       <div className="space-y-1 text-center py-2">
         <div className="flex items-center justify-center gap-2">
           <div className="w-1.5 h-1.5 rounded-full" style={{ background: "#ff3b3b", boxShadow: "0 0 6px #ff3b3b" }} />
-          <span className="section-label" style={{ color: "#ff3b3b" }}>XGBOOST WINNER</span>
+          <span className="section-label" style={{ color: "#ff3b3b" }}>ML ENSEMBLE WINNER</span>
         </div>
-        <p className="text-[10px] font-mono" style={{ color: "rgba(100,116,139,0.6)" }}>
+        <p className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.85)" }}>
           Detected{xgbLatency !== null ? ` in ${fmtMs(xgbLatency)}` : ""} — Community: no detection
         </p>
       </div>
@@ -84,9 +84,9 @@ function VerdictBar({ xgbFirst, commFirst, replayStart, xgbTotal, commTotal, sno
       <div className="space-y-1 text-center py-2">
         <div className="flex items-center justify-center gap-2">
           <div className="w-1.5 h-1.5 rounded-full threat-active" style={{ background: "#ff3b3b" }} />
-          <span className="section-label" style={{ color: "#ff3b3b" }}>XGBOOST {ratio}× FASTER</span>
+          <span className="section-label" style={{ color: "#ff3b3b" }}>ML ENSEMBLE {ratio}× FASTER</span>
         </div>
-        <p className="text-[10px] font-mono" style={{ color: "rgba(100,116,139,0.6)" }}>
+        <p className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.85)" }}>
           {fmtMs(xgbLatency)} vs Community {fmtMs(commLatency)}
         </p>
       </div>
@@ -95,7 +95,7 @@ function VerdictBar({ xgbFirst, commFirst, replayStart, xgbTotal, commTotal, sno
 
   return (
     <div className="text-center py-3">
-      <span className="section-label" style={{ color: "rgba(100,116,139,0.5)" }}>
+      <span className="section-label" style={{ color: "rgba(148,163,184,0.75)" }}>
         XGB: {xgbTotal} · COMM: {commTotal}
       </span>
     </div>
@@ -150,7 +150,7 @@ function EngineSide({
   replayStart,
   fileCount,
 }: {
-  engine: Engine;
+  engine: CoreEngine;
   state: EngineState;
   replayStart: number | null;
   fileCount: number;
@@ -176,7 +176,7 @@ function EngineSide({
       {/* Engine label */}
       <div className="flex items-center gap-1.5">
         <div className="w-1.5 h-1.5" style={{ background: color, boxShadow: `0 0 4px ${color}` }} />
-        <span className="section-label" style={{ color }}>{isXgb ? "XGBOOST" : "COMMUNITY"}</span>
+        <span className="section-label" style={{ color }}>{isXgb ? "ML ENSEMBLE" : "COMMUNITY"}</span>
       </div>
 
       {/* Alert count */}
@@ -184,9 +184,9 @@ function EngineSide({
         <p className="display-num" style={{ fontSize: "2.2rem", lineHeight: 1, color, fontFamily: '"IBM Plex Mono", monospace', letterSpacing: "-0.02em" }}>
           {state.total.toLocaleString()}
         </p>
-        <p className="text-[9px] font-mono mt-0.5" style={{ color: "rgba(100,116,139,0.6)" }}>ALERTS STREAMED</p>
+        <p className="text-[9px] font-mono mt-0.5" style={{ color: "rgba(148,163,184,0.85)" }}>ALERTS STREAMED</p>
         {fileCount > 0 && (
-          <p className="text-[9px] font-mono" style={{ color: "rgba(100,116,139,0.4)" }}>
+          <p className="text-[9px] font-mono" style={{ color: "rgba(148,163,184,0.65)" }}>
             {fmtCount(fileCount)} IN FILE
           </p>
         )}
@@ -194,12 +194,12 @@ function EngineSide({
 
       {/* First detection */}
       <div>
-        <p className="section-label mb-0.5" style={{ color: "rgba(100,116,139,0.5)" }}>FIRST DETECT</p>
-        <p className="text-xs font-mono font-semibold" style={{ color: state.firstAlertAt ? color : "rgba(100,116,139,0.4)" }}>
+        <p className="section-label mb-0.5" style={{ color: "rgba(148,163,184,0.75)" }}>FIRST DETECT</p>
+        <p className="text-xs font-mono font-semibold" style={{ color: state.firstAlertAt ? color : "rgba(148,163,184,0.65)" }}>
           {latencyStr}
         </p>
         {isXgb && state.firstAlertAt && (
-          <p className="text-[9px] font-mono" style={{ color: "rgba(100,116,139,0.4)" }}>PKT 2 · max_packets=2</p>
+          <p className="text-[9px] font-mono" style={{ color: "rgba(148,163,184,0.65)" }}>PKT 2 · max_packets=2</p>
         )}
       </div>
 
@@ -217,12 +217,12 @@ export function ComparisonPanel({
   snortRunning,
   fileCounts,
 }: Props) {
-  const [engineStates, setEngineStates] = useState<Record<Engine, EngineState>>({
+  const [engineStates, setEngineStates] = useState<Record<CoreEngine, EngineState>>({
     xgboost: EMPTY_ENGINE(),
     community: EMPTY_ENGINE(),
   });
 
-  const pendingTotals = useRef<Record<Engine, number>>({ xgboost: 0, community: 0 });
+  const pendingTotals = useRef<Record<CoreEngine, number>>({ xgboost: 0, community: 0 });
   const prevAlertCount = useRef(0);
   const prevRunning = useRef(false);
 
@@ -238,7 +238,7 @@ export function ComparisonPanel({
   useEffect(() => {
     setEngineStates((prev) => {
       const next = { ...prev };
-      for (const eng of ["xgboost", "community"] as Engine[]) {
+      for (const eng of ["xgboost", "community"] as CoreEngine[]) {
         const t = firstAlertAtByEngine[eng];
         if (t !== null && prev[eng].firstAlertAt === null) {
           next[eng] = { ...prev[eng], firstAlertAt: t };
@@ -255,7 +255,8 @@ export function ComparisonPanel({
       const newCount = alerts.length - prevAlertCount.current;
       const newAlerts = alerts.slice(0, newCount);
       for (const a of newAlerts) {
-        pendingTotals.current[a.engine] += 1;
+        const bucket: CoreEngine = a.engine === "community" ? "community" : "xgboost";
+        pendingTotals.current[bucket] += 1;
       }
     }
     prevAlertCount.current = alerts.length;
@@ -265,8 +266,8 @@ export function ComparisonPanel({
     const id = setInterval(() => {
       const now = Date.now();
       setEngineStates((prev) => {
-        const next: Record<Engine, EngineState> = { xgboost: prev.xgboost, community: prev.community };
-        for (const eng of ["xgboost", "community"] as Engine[]) {
+        const next: Record<CoreEngine, EngineState> = { xgboost: prev.xgboost, community: prev.community };
+        for (const eng of ["xgboost", "community"] as CoreEngine[]) {
           const total = metrics[eng].total;
           if (total === prev[eng].total) continue;
           const history = [...prev[eng].history, { t: now, count: total }].slice(-MAX_HISTORY);
@@ -304,7 +305,7 @@ export function ComparisonPanel({
           </span>
           <div>
             <p className="section-label" style={{ color: "#10b981" }}>FEWER FALSE ALARMS</p>
-            <p className="text-[9px] font-mono" style={{ color: "rgba(100,116,139,0.5)" }}>XGBoost vs Community Rules</p>
+            <p className="text-[9px] font-mono" style={{ color: "rgba(148,163,184,0.75)" }}>XGBoost vs Community Rules</p>
           </div>
         </div>
 

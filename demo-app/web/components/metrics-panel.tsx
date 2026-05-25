@@ -63,7 +63,7 @@ function StatCard({ label, sublabel, value, subvalue, color }: StatCardProps) {
 
       <div>
         <p className="section-label mb-0.5" style={{ color: "rgba(0,212,255,0.4)" }}>{label}</p>
-        {sublabel && <p className="text-[10px] font-mono" style={{ color: "rgba(100,116,139,0.7)" }}>{sublabel}</p>}
+        {sublabel && <p className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.9)" }}>{sublabel}</p>}
       </div>
 
       <div>
@@ -71,7 +71,7 @@ function StatCard({ label, sublabel, value, subvalue, color }: StatCardProps) {
           {value}
         </p>
         {subvalue && (
-          <p className="text-[10px] font-mono mt-1.5" style={{ color: "rgba(100,116,139,0.8)" }}>{subvalue}</p>
+          <p className="text-[10px] font-mono mt-1.5" style={{ color: "rgba(148,163,184,0.95)" }}>{subvalue}</p>
         )}
       </div>
     </div>
@@ -152,7 +152,7 @@ export function MetricsPanel({
                 }}
               />
             </div>
-            <p className="text-[10px] font-mono mt-1" style={{ color: "rgba(100,116,139,0.7)" }}>
+            <p className="text-[10px] font-mono mt-1" style={{ color: "rgba(148,163,184,0.9)" }}>
               {pct}% PCAP PROCESSED
             </p>
           </div>

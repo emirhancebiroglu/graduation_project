@@ -131,7 +131,7 @@ portscan_inspector =
     model_path   = "/home/emirhan/bitirme/models/portscan_aggregator_model_v4d.json",
     window_sec   = 60,
     min_packets  = 5,
-    min_dst_ports = 30,
+    min_dst_ports = 1,
 }
 
 -- Snort built-in portscan inspector (distributed scans, UDP sweeps, ICMP)

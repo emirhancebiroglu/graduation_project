@@ -17,8 +17,8 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Aegis IDS — Demo",
-  description: "Real-time intrusion detection dashboard powered by XGBoost",
+  title: "CyberSense IDS — Demo",
+  description: "Real-time intrusion detection dashboard — ML Ensemble + Community Rules",
 };
 
 export default function RootLayout({

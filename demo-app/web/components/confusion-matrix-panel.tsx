@@ -56,7 +56,7 @@ function MetricBar({ label, xgbValue, commValue, xgbWins, isPercent, invertWin }
   const commBarColor = isTie ? "#64748b" : invertWin ? (!xgbWins ? "#10b981" : "#ff3b3b") : (!xgbWins ? "#10b981" : "#00d4ff");
 
   const tieTag = (
-    <span className="text-[9px] font-mono px-1.5 py-0.5" style={{ border: "1px solid rgba(100,116,139,0.3)", background: "rgba(100,116,139,0.08)", color: "#64748b" }}>
+    <span className="text-[9px] font-mono px-1.5 py-0.5" style={{ border: "1px solid rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.1)", color: "#94a3b8" }}>
       TIE
     </span>
   );
@@ -72,7 +72,7 @@ function MetricBar({ label, xgbValue, commValue, xgbWins, isPercent, invertWin }
       {/* XGBoost side */}
       <div className="space-y-1">
         <div className="flex items-center gap-2">
-          <span className="section-label w-20 shrink-0" style={{ color: "rgba(100,116,139,0.7)" }}>{label}</span>
+          <span className="section-label w-20 shrink-0" style={{ color: "rgba(148,163,184,0.9)" }}>{label}</span>
           <span className="text-xs font-mono font-semibold tabular-nums" style={{ color: "#ff3b3b" }}>
             {xgbValue.toFixed(2)}{suffix}
           </span>
@@ -92,7 +92,7 @@ function MetricBar({ label, xgbValue, commValue, xgbWins, isPercent, invertWin }
       {/* Community side */}
       <div className="space-y-1">
         <div className="flex items-center gap-2">
-          <span className="section-label w-20 shrink-0" style={{ color: "rgba(100,116,139,0.7)" }}>{label}</span>
+          <span className="section-label w-20 shrink-0" style={{ color: "rgba(148,163,184,0.9)" }}>{label}</span>
           <span className="text-xs font-mono font-semibold tabular-nums" style={{ color: "#00d4ff" }}>
             {commValue.toFixed(2)}{suffix}
           </span>
@@ -132,7 +132,7 @@ export function ConfusionMatrixPanel() {
           <div className="w-1 h-4" style={{ background: "rgba(0,212,255,0.6)", boxShadow: "0 0 6px rgba(0,212,255,0.6)" }} />
           <div>
             <span className="section-label" style={{ color: "#00d4ff" }}>PERFORMANCE METRICS — WEDNESDAY CIC-IDS2017</span>
-            <span className="section-label ml-3" style={{ color: "rgba(100,116,139,0.5)" }}>DoS Hulk · GoldenEye · Slowloris · Heartbleed</span>
+            <span className="section-label ml-3" style={{ color: "rgba(148,163,184,0.75)" }}>DoS Hulk · GoldenEye · Slowloris · Heartbleed</span>
           </div>
         </div>
         <span className="section-label transition-transform" style={{ color: "rgba(0,212,255,0.4)", transform: open ? "rotate(90deg)" : "none", display: "inline-block" }}>▸</span>
@@ -144,7 +144,7 @@ export function ConfusionMatrixPanel() {
           <div className="grid grid-cols-2 gap-4">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2" style={{ background: "#ff3b3b", boxShadow: "0 0 6px #ff3b3b" }} />
-              <span className="section-label" style={{ color: "#ff3b3b" }}>XGBOOST INSPECTOR</span>
+              <span className="section-label" style={{ color: "#ff3b3b" }}>ML ENSEMBLE</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2" style={{ background: "#00d4ff", boxShadow: "0 0 6px #00d4ff" }} />
@@ -178,7 +178,7 @@ export function ConfusionMatrixPanel() {
           </div>
 
           {/* Footer */}
-          <p className="section-label pt-2 border-t" style={{ color: "rgba(100,116,139,0.4)", borderColor: "rgba(0,212,255,0.06)" }}>
+          <p className="section-label pt-2 border-t" style={{ color: "rgba(148,163,184,0.65)", borderColor: "rgba(0,212,255,0.06)" }}>
             EVALUATED ON 692,703 FLOWS · WEDNESDAY-WORKINGHOURS.PCAP · GROUND TRUTH LABELS
           </p>
         </div>

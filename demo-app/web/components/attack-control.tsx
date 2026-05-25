@@ -85,15 +85,15 @@ export function AttackControl({ snortRunning, onStarting }: Props) {
             </div>
           )}
           <div className="text-left">
-            <p className="text-sm font-mono font-semibold" style={{ color: "#00d4ff", letterSpacing: "0.05em" }}>ANALYZE WEDNESDAY PCAP</p>
-            <p className="text-[10px] font-mono mt-0.5" style={{ color: "rgba(100,116,139,0.5)" }}>CIC-IDS2017 Wednesday-WorkingHours · click to start analysis</p>
+            <p className="text-sm font-mono font-semibold" style={{ color: "#00d4ff", letterSpacing: "0.05em" }}>RUN ENSEMBLE ANALYSIS</p>
+            <p className="text-[10px] font-mono mt-0.5" style={{ color: "rgba(148,163,184,0.75)" }}>CIC-IDS2017 Wednesday · ML Ensemble + Community Rules · click to start</p>
           </div>
           <div className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-sm" style={{ border: "1px solid rgba(0,212,255,0.15)", background: "rgba(0,212,255,0.05)" }}>
             <span className="text-[9px] font-mono" style={{ color: "rgba(0,212,255,0.5)" }}>~180s</span>
           </div>
         </button>
       ) : (
-        <div className="relative px-5 py-4 flex items-center gap-4" style={{ borderBottom: "1px solid rgba(100,116,139,0.1)" }}>
+        <div className="relative px-5 py-4 flex items-center gap-4" style={{ borderBottom: "1px solid rgba(148,163,184,0.15)" }}>
           <div className="relative shrink-0">
             <div className="radar-sweep w-8 h-8 rounded-full" style={{ border: "1px solid rgba(0,212,255,0.3)", background: "rgba(0,212,255,0.05)" }}>
               <div className="radar-sweep-inner absolute inset-0 rounded-full" style={{ background: "conic-gradient(from 0deg, transparent 0deg, rgba(0,212,255,0.4) 30deg, transparent 60deg)" }} />
@@ -111,7 +111,7 @@ export function AttackControl({ snortRunning, onStarting }: Props) {
           </div>
           <div className="flex-1">
             <p className="text-sm font-mono font-semibold" style={{ color: "#00d4ff" }}>ANALYSIS IN PROGRESS</p>
-            <p className="text-[10px] font-mono mt-0.5" style={{ color: "rgba(100,116,139,0.5)" }}>Snort inspector running · alerts being processed</p>
+            <p className="text-[10px] font-mono mt-0.5" style={{ color: "rgba(148,163,184,0.75)" }}>Snort inspector running · alerts being processed</p>
           </div>
           <button
             disabled={loading === "stop"}

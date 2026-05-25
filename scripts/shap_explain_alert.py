@@ -62,6 +62,25 @@ def preprocess(raw: list[float]) -> np.ndarray:
     return x.reshape(1, -1)
 
 
+_FEATURE_DESCRIPTIONS: dict[str, str] = {
+    "dur":          "flow duration",
+    "spkts":        "source packet count",
+    "dpkts":        "destination packet count",
+    "sbytes":       "source bytes",
+    "dbytes":       "destination bytes",
+    "smeansz":      "mean source packet size",
+    "dmeansz":      "mean destination packet size",
+    "sintpkt":      "mean inter-packet time (src)",
+    "dintpkt":      "mean inter-packet time (dst)",
+    "fwd_pkt_mean": "forward packet mean size",
+    "bwd_pkt_mean": "backward packet mean size",
+    "fin_cnt":      "FIN flag count",
+    "ack_cnt":      "ACK flag count",
+    "syn_cnt":      "SYN flag count",
+    "bwd_iat":      "backward inter-arrival time",
+}
+
+
 def explain(raw_features: list[float], top_n: int = 5) -> list[dict]:
     """Compute SHAP contributions for a single flow.
 
@@ -79,14 +98,44 @@ def explain(raw_features: list[float], top_n: int = 5) -> list[dict]:
     contributions = []
     for i, (fname, raw_val, sv_val) in enumerate(zip(FEATURE_NAMES, raw_features, sv)):
         contributions.append({
-            'feature':    fname,
-            'raw_value':  round(float(raw_val), 6),
-            'shap_value': round(float(sv_val), 6),
-            'direction':  'attack' if sv_val > 0 else 'benign',
+            'feature':     fname,
+            'description': _FEATURE_DESCRIPTIONS.get(fname, fname),
+            'raw_value':   round(float(raw_val), 6),
+            'shap_value':  round(float(sv_val), 6),
+            'direction':   'attack' if sv_val > 0 else 'benign',
         })
 
     contributions.sort(key=lambda x: abs(x['shap_value']), reverse=True)
     return contributions[:top_n]
+
+
+def shap_to_narrative(contributions: list[dict]) -> str:
+    """Convert top SHAP contributions to plain-text 'Why flagged:' string."""
+    attack_top = [c for c in contributions if c['direction'] == 'attack'][:3]
+    benign_top = [c for c in contributions if c['direction'] == 'benign'][:1]
+
+    parts = []
+    for c in attack_top:
+        raw = c['raw_value']
+        name = c['description']
+        fmt = str(int(raw)) if raw == int(raw) and abs(raw) < 1e6 else f"{raw:.3g}"
+        parts.append(f"{name}={fmt}")
+
+    if not parts:
+        for c in contributions[:2]:
+            raw = c['raw_value']
+            name = c['description']
+            fmt = str(int(raw)) if raw == int(raw) and abs(raw) < 1e6 else f"{raw:.3g}"
+            parts.append(f"{name}={fmt}")
+
+    suffix = ""
+    if benign_top and attack_top:
+        b = benign_top[0]
+        raw = b['raw_value']
+        fmt = str(int(raw)) if raw == int(raw) and abs(raw) < 1e6 else f"{raw:.3g}"
+        suffix = f"; low {b['description']} ({fmt}) reduces confidence"
+
+    return "Why flagged: " + ", ".join(parts) + suffix
 
 
 def main():

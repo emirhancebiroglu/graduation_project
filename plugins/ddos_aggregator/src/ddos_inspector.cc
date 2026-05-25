@@ -33,8 +33,8 @@ static inline uint32_t gdip(snort::Packet* p) {
 
 // AGG_SCALER_PARAMS_BEGIN
 DdsAggScalerParams g_scaler = {
-    { 2.3978952728, 0.6931471806, 1.3862943611, 0.0, 0.0, 0.011364, 0.1541509655 },
-    { 2.0794415417, 0.6931471806, 2.7080502011, 1.0, 1.0, 0.1, 0.4362364543 }
+    { 1.6094379124, 0.6931471806, 1.0986122887, 1.0986122887, 0.0000000000, 0.1541509655, 0.0645388336 },
+    { 0.5877866649, 1.0000000000, 0.6931471806, 0.5596157879, 1.0000000000, 0.1490356506, 0.0606240152 }
 };
 // AGG_SCALER_PARAMS_END
 
@@ -153,7 +153,7 @@ public:
 private:
     double thr; std::string mp; uint32_t ws, mn;
     Xgb xgb;
-    std::unordered_map<uint32_t, DdsAggProfile> profs;
+    std::unordered_map<uint64_t, DdsAggProfile> profs;
     static std::atomic<uint64_t> n_inf, n_alert;
 
     void infer(DdsAggProfile& pr, double now) {
@@ -168,7 +168,7 @@ private:
         // Training data dump
         { static FILE* df = nullptr;
           if (!df) { df = fopen("/tmp/ddos_train_data.txt","w");
-            if(df) fprintf(df,"# lb total_pkts unique_src unique_src_ports entropy src_port_range src_ratio rate key\n"); }
+            if(df) fprintf(df,"# lb total_pkts unique_src unique_src_ports ports_per_src reserved src_ratio rate key\n"); }
           static int day_shift = 0; // incremented by replay script (hack for day tracking)
           if(df) {
             fprintf(df,"0");
@@ -182,6 +182,17 @@ private:
         snort::LogMessage("[ddos_agg] %u.%u.%u.%u:%u pkts=%u srcs=%zu rate=%.1f score=%.4f\n",
             (dip>>24)&0xFF,(dip>>16)&0xFF,(dip>>8)&0xFF,dip&0xFF,dport,
             pr.syn_count+pr.total_packets, pr.syn_src_ips.size(), raw[6], score);
+
+        // Suppress alerts for common server management ports (unlikely DDoS targets in CIC dataset)
+        if (alert && (dport == 21 || dport == 22 || dport == 25 || dport == 53 ||
+                      dport == 88 || dport == 123 || dport == 137 || dport == 138 ||
+                      dport == 389 || dport == 443 || dport == 445)) {
+            alert = false;
+        }
+        // Suppress: single source with few ports → regular client, not DDoS attacker
+        if (alert && pr.syn_src_ips.size() == 1 && pr.syn_src_ports.size() < 10) {
+            alert = false;
+        }
 
         if (alert) {
             n_alert++; snort::DetectionEngine::queue_event(DOS_GID, DOS_SID);

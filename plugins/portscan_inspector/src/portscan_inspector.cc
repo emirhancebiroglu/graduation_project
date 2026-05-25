@@ -25,6 +25,10 @@ static inline uint32_t gsip(snort::Packet* p) {
     if (!p) return 0; auto* ip = p->ptrs.ip_api.get_src();
     return (ip && ip->is_ip4()) ? ntohl(ip->get_ip4_value()) : 0;
 }
+static inline uint32_t gdip(snort::Packet* p) {
+    if (!p) return 0; auto* ip = p->ptrs.ip_api.get_dst();
+    return (ip && ip->is_ip4()) ? ntohl(ip->get_ip4_value()) : 0;
+}
 
 // AGG_SCALER_PARAMS_BEGIN
 PsiAggScalerParams g_scaler = {
@@ -102,6 +106,24 @@ public:
         double now = 0;
         if (p->pkth) now = p->pkth->ts.tv_sec + p->pkth->ts.tv_usec / 1e6;
 
+        uint32_t src = gsip(p);
+        uint32_t dst = gdip(p);
+        if (src == 0) return;
+
+        // Check window expiry for any packet from tracked src (not just SYN/FNX).
+        // Without this, a scanner that stops sending SYNs just before window_sec
+        // would never trigger inference even if non-SYN packets arrive after expiry.
+        {
+            auto it = profs.find(src);
+            if (it != profs.end()) {
+                auto& pr = it->second;
+                if (pr.is_window_expired(now, ws)) {
+                    if (!pr.inference_done && pr.syn_count >= mn) infer(pr, now);
+                    pr.reset(src, now);
+                }
+            }
+        }
+
         // Classify packet
         uint8_t ptype = 0; uint16_t sp = 0, dp = 0;
         if (p->ptrs.tcph) {
@@ -113,25 +135,16 @@ public:
         }
         if (!ptype) return;
 
-        uint32_t src = gsip(p);
-        if (src == 0) return;
-
         auto it = profs.find(src);
         if (it == profs.end()) {
             PsiAggProfile pr; pr.reset(src, now);
-            if (ptype=='S') pr.add_syn(0, dp, sp); else pr.add_fnx();
+            if (ptype=='S') pr.add_syn(dst, dp, sp); else pr.add_fnx();
             profs[src] = pr; return;
         }
         auto& pr = it->second;
 
-        // Window expiry check
-        if (pr.is_window_expired(now, ws)) {
-            if (!pr.inference_done && pr.syn_count >= mn) infer(pr, now);
-            pr.reset(src, now);
-        }
-
         if (ptype=='S') {
-            pr.add_syn(0, dp, sp);
+            pr.add_syn(dst, dp, sp);
             if (!pr.inference_done && pr.syn_count >= mn && pr.is_window_expired(now, ws))
                 infer(pr, now);
         } else {
@@ -178,10 +191,15 @@ private:
             (pr.src_ip>>24)&0xFF,(pr.src_ip>>16)&0xFF,(pr.src_ip>>8)&0xFF,pr.src_ip&0xFF,
             pr.syn_count, pr.syn_dst_ports.size(), pr.fnx_count, score);
 
-        if (score > thr) {
+        // IP-sweep heuristic: internet-wide scanners (masscan/zmap) hit many IPs, few ports.
+        // ML score is low for these because port diversity is low, but threat is real.
+        bool ip_sweep = (pr.syn_dst_ips.size() >= 100 && pr.syn_count >= 500);
+        if (score > thr || ip_sweep) {
+            float report_score = ip_sweep ? 0.990f : score;
             alert++; snort::DetectionEngine::queue_event(PSI_GID, PSI_SID);
-            snort::LogMessage("[portscan] ALERT: %u.%u.%u.%u score=%.4f\n",
-                (pr.src_ip>>24)&0xFF,(pr.src_ip>>16)&0xFF,(pr.src_ip>>8)&0xFF,pr.src_ip&0xFF, score);
+            snort::LogMessage("[portscan] ALERT: %u.%u.%u.%u score=%.4f%s\n",
+                (pr.src_ip>>24)&0xFF,(pr.src_ip>>16)&0xFF,(pr.src_ip>>8)&0xFF,pr.src_ip&0xFF,
+                report_score, ip_sweep ? " [ip-sweep]" : "");
         }
     }
 };

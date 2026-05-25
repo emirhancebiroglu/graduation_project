@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useRef, useState, useCallback } from "react";
-import type { WsMessage, Alert, EvaluationResult } from "./types";
+import type { WsMessage, Alert, EvaluationResult, CoreEngine } from "./types";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000/ws";
 const MAX_RECENT_ALERTS = 20;
 const MAX_FEED_ALERTS = 500;
+const FLUSH_INTERVAL_MS = 150; // batch setState at most ~6x/sec
 
 export type ReplayPhase = "idle" | "running" | "evaluating" | "complete";
 export type EngineMetrics = { total: number; alertsPerSec: number };
@@ -19,7 +20,7 @@ export type IdsStreamState = {
   evaluation: EvaluationResult | null;
   recentAlerts: Alert[];
   alerts: Alert[];
-  engineAlerts: Record<"xgboost" | "community", Alert[]>;
+  engineAlerts: Record<CoreEngine, Alert[]>;
 };
 
 export function useIdsStream(): IdsStreamState {
@@ -32,14 +33,16 @@ export function useIdsStream(): IdsStreamState {
   const [pcapProgressVisible, setPcapProgressVisible] = useState(false);
   const [recentAlerts, setRecentAlerts] = useState<Alert[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [engineAlerts, setEngineAlerts] = useState<Record<"xgboost" | "community", Alert[]>>({ xgboost: [], community: [] });
+  const [engineAlerts, setEngineAlerts] = useState<Record<CoreEngine, Alert[]>>({ xgboost: [], community: [] });
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevRunning = useRef(false);
   const recentAlertsRef = useRef<Alert[]>([]);
   const alertsRef = useRef<Alert[]>([]);
-  const engineAlertsRef = useRef<Record<"xgboost" | "community", Alert[]>>({ xgboost: [], community: [] });
+  const engineAlertsRef = useRef<Record<CoreEngine, Alert[]>>({ xgboost: [], community: [] });
+  const pendingFlush = useRef(false);
 
   const handleStatus = useCallback((running: boolean, progress: number, err: string | null | undefined) => {
     setSnortRunning(running);
@@ -101,25 +104,29 @@ export function useIdsStream(): IdsStreamState {
             handleEvaluation(msg.data);
           } else if (msg.type === "alert") {
             const alert = msg.data as Alert;
-            const eng = msg.engine as "xgboost" | "community";
+            // Map all ML engines → "xgboost" bucket for filter; community stays community
+            const bucket: "xgboost" | "community" =
+              alert.engine === "community" ? "community" : "xgboost";
 
-            // Feed (all engines, newest-first, capped)
+            // Mutate refs only — no setState here
             alertsRef.current = [alert, ...alertsRef.current].slice(0, MAX_FEED_ALERTS);
-            setAlerts([...alertsRef.current]);
-
             engineAlertsRef.current = {
               ...engineAlertsRef.current,
-              [eng]: [alert, ...engineAlertsRef.current[eng]].slice(0, MAX_FEED_ALERTS),
+              [bucket]: [alert, ...engineAlertsRef.current[bucket]].slice(0, MAX_FEED_ALERTS),
             };
-            setEngineAlerts({ ...engineAlertsRef.current });
+            if (bucket === "xgboost") {
+              recentAlertsRef.current = [alert, ...recentAlertsRef.current].slice(0, MAX_RECENT_ALERTS);
+            }
 
-            // Recent alerts for ImpactSummary terminal (XGB only)
-            if (eng === "xgboost") {
-              recentAlertsRef.current = [
-                ...recentAlertsRef.current,
-                alert,
-              ].slice(-MAX_RECENT_ALERTS);
-              setRecentAlerts([...recentAlertsRef.current]);
+            // Schedule a single batched flush
+            if (!pendingFlush.current) {
+              pendingFlush.current = true;
+              flushTimer.current = setTimeout(() => {
+                setAlerts([...alertsRef.current]);
+                setEngineAlerts({ ...engineAlertsRef.current });
+                setRecentAlerts([...recentAlertsRef.current]);
+                pendingFlush.current = false;
+              }, FLUSH_INTERVAL_MS);
             }
           }
         } catch (e) {
@@ -142,6 +149,7 @@ export function useIdsStream(): IdsStreamState {
     connect();
     return () => {
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      if (flushTimer.current) clearTimeout(flushTimer.current);
       wsRef.current?.close();
     };
   }, [connect]);

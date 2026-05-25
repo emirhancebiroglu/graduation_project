@@ -9,6 +9,7 @@ from watchfiles import awatch
 
 from models import Alert, Engine
 from parsers import parse_alert_csv_line
+from typing import Optional as _Opt
 
 logger = logging.getLogger("alert-tailer")
 
@@ -31,11 +32,11 @@ class AlertTailer:
     def __init__(
         self,
         file_path: Path,
-        engine: Engine,
+        engine: "_Opt[Engine]",
         on_alert: Callable[[Alert], Awaitable[None]],
     ) -> None:
         self._path = file_path
-        self._engine = engine
+        self._engine = engine  # None = combined mode, GID-based routing in parser
         self._on_alert = on_alert
         self._offset = 0
         self._queue: asyncio.Queue[Alert] = asyncio.Queue(maxsize=_QUEUE_MAXSIZE)

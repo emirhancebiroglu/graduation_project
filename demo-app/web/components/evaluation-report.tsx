@@ -53,7 +53,7 @@ type MetricBarProps = {
 };
 
 function MetricBar({ label, xgbValue, commValue, xgbWins, invertWin }: MetricBarProps) {
-  const isTie = xgbValue.toFixed(2) === commValue.toFixed(2);
+  const isTie = xgbValue.toFixed(4) === commValue.toFixed(4);
 
   const xgbActuallyWins = !isTie && xgbWins;
   const commActuallyWins = !isTie && !xgbWins;
@@ -66,13 +66,13 @@ function MetricBar({ label, xgbValue, commValue, xgbWins, invertWin }: MetricBar
 
   return (
     <div className="flex items-center gap-4 py-2 border-b last:border-0" style={{ borderColor: "rgba(0,212,255,0.05)" }}>
-      <span className="section-label w-16 shrink-0 text-[9px]" style={{ color: "rgba(100,116,139,0.6)" }}>{label}</span>
+      <span className="section-label w-16 shrink-0 text-[9px]" style={{ color: "rgba(148,163,184,0.85)" }}>{label}</span>
 
       <div className="flex-1">
         <div className="flex items-center gap-1.5 mb-1">
           <span className="text-[10px] font-mono font-semibold tabular-nums" style={{ color: "#ff3b3b" }}>{xgbValue.toFixed(2)}%</span>
           {isTie ? (
-            <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(100,116,139,0.3)", background: "rgba(100,116,139,0.08)", color: "#64748b" }}>TIE</span>
+            <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.1)", color: "#94a3b8" }}>TIE</span>
           ) : xgbActuallyWins ? (
             <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(16,185,129,0.3)", background: "rgba(16,185,129,0.08)", color: "#10b981" }}>WIN</span>
           ) : null}
@@ -86,7 +86,7 @@ function MetricBar({ label, xgbValue, commValue, xgbWins, invertWin }: MetricBar
         <div className="flex items-center gap-1.5 mb-1">
           <span className="text-[10px] font-mono font-semibold tabular-nums" style={{ color: "#00d4ff" }}>{commValue.toFixed(2)}%</span>
           {isTie ? null : commActuallyWins ? (
-            <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(100,116,139,0.3)", background: "rgba(100,116,139,0.08)", color: "#64748b" }}>WIN</span>
+            <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.1)", color: "#94a3b8" }}>WIN</span>
           ) : null}
         </div>
         <div className="h-px w-full" style={{ background: "rgba(0,212,255,0.06)" }}>
@@ -125,7 +125,7 @@ export function EvaluationReport({ evaluation }: Props) {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 skel" style={{ background: "#ff3b3b", borderRadius: "50%" }} />
-                <span className="section-label text-[9px]" style={{ color: "#ff3b3b" }}>XGBOOST INSPECTOR</span>
+                <span className="section-label text-[9px]" style={{ color: "#ff3b3b" }}>ML ENSEMBLE</span>
               </div>
               <div className="grid grid-cols-2 gap-1">
                 {["TP","FP","FN","TN"].map(v => (
@@ -156,21 +156,21 @@ export function EvaluationReport({ evaluation }: Props) {
 
           <div className="border-t pt-3 space-y-0" style={{ borderColor: "rgba(0,212,255,0.06)" }}>
             <div className="flex items-center gap-3 pb-1.5 border-b" style={{ borderColor: "rgba(0,212,255,0.05)" }}>
-              <span className="section-label w-16 shrink-0 text-[9px] skel" style={{ color: "rgba(100,116,139,0.3)" }}>METRIC</span>
-              <span className="flex-1 section-label text-[9px] skel" style={{ color: "rgba(255,59,59,0.3)" }}>XGB</span>
+              <span className="section-label w-16 shrink-0 text-[9px] skel" style={{ color: "rgba(148,163,184,0.5)" }}>METRIC</span>
+              <span className="flex-1 section-label text-[9px] skel" style={{ color: "rgba(255,59,59,0.3)" }}>ML ENS</span>
               <span className="flex-1 section-label text-[9px] skel" style={{ color: "rgba(0,212,255,0.3)" }}>COMM</span>
             </div>
             {["Accuracy","Precision","Recall","F1-Score","FPR"].map(label => (
               <div key={label} className="flex items-center gap-4 py-2 border-b last:border-0 skel"
                 style={{ borderColor: "rgba(0,212,255,0.04)" }}>
-                <span className="section-label w-16 shrink-0 text-[9px]" style={{ color: "rgba(100,116,139,0.3)" }}>{label}</span>
+                <span className="section-label w-16 shrink-0 text-[9px]" style={{ color: "rgba(148,163,184,0.5)" }}>{label}</span>
                 <div className="flex-1 h-px skel" style={{ background: "rgba(0,212,255,0.1)" }} />
                 <div className="flex-1 h-px skel" style={{ background: "rgba(0,212,255,0.1)" }} />
               </div>
             ))}
           </div>
 
-          <p className="section-label text-[9px] pt-2 border-t skel" style={{ color: "rgba(100,116,139,0.2)", borderColor: "rgba(0,212,255,0.04)" }}>
+          <p className="section-label text-[9px] pt-2 border-t skel" style={{ color: "rgba(148,163,184,0.4)", borderColor: "rgba(0,212,255,0.04)" }}>
             AWAITING ANALYSIS...
           </p>
         </div>
@@ -208,7 +208,7 @@ export function EvaluationReport({ evaluation }: Props) {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5" style={{ background: "#ff3b3b", boxShadow: "0 0 6px #ff3b3b" }} />
-                <span className="section-label text-[9px]" style={{ color: "#ff3b3b" }}>XGBOOST INSPECTOR</span>
+                <span className="section-label text-[9px]" style={{ color: "#ff3b3b" }}>ML ENSEMBLE</span>
               </div>
               <div className="grid grid-cols-2 gap-1">
                 <MatrixCell label="TP" value={xgb.TP} variant="tp" />
@@ -234,18 +234,18 @@ export function EvaluationReport({ evaluation }: Props) {
 
           <div className="border-t pt-3 space-y-0" style={{ borderColor: "rgba(0,212,255,0.06)" }}>
             <div className="flex items-center gap-3 pb-1.5 border-b" style={{ borderColor: "rgba(0,212,255,0.05)" }}>
-              <span className="section-label w-16 shrink-0 text-[9px]" style={{ color: "rgba(100,116,139,0.5)" }}>METRIC</span>
-              <span className="flex-1 section-label text-[9px]" style={{ color: "rgba(255,59,59,0.5)" }}>XGB</span>
+              <span className="section-label w-16 shrink-0 text-[9px]" style={{ color: "rgba(148,163,184,0.75)" }}>METRIC</span>
+              <span className="flex-1 section-label text-[9px]" style={{ color: "rgba(255,59,59,0.5)" }}>ML ENS</span>
               <span className="flex-1 section-label text-[9px]" style={{ color: "rgba(0,212,255,0.5)" }}>COMM</span>
             </div>
-            <MetricBar label="Accuracy" xgbValue={xgb.accuracy * 100} commValue={comm.accuracy * 100} xgbWins={true} />
-            <MetricBar label="Precision" xgbValue={xgb.precision * 100} commValue={comm.precision * 100} xgbWins={true} />
-            <MetricBar label="Recall" xgbValue={xgb.recall * 100} commValue={comm.recall * 100} xgbWins={false} />
-            <MetricBar label="F1-Score" xgbValue={xgb.f1 * 100} commValue={comm.f1 * 100} xgbWins={true} />
-            <MetricBar label="FPR" xgbValue={xgb.fpr * 100} commValue={comm.fpr * 100} xgbWins={true} invertWin />
+            <MetricBar label="Accuracy" xgbValue={xgb.accuracy * 100} commValue={comm.accuracy * 100} xgbWins={xgb.accuracy >= comm.accuracy} />
+            <MetricBar label="Precision" xgbValue={xgb.precision * 100} commValue={comm.precision * 100} xgbWins={xgb.precision >= comm.precision} />
+            <MetricBar label="Recall" xgbValue={xgb.recall * 100} commValue={comm.recall * 100} xgbWins={xgb.recall >= comm.recall} />
+            <MetricBar label="F1-Score" xgbValue={xgb.f1 * 100} commValue={comm.f1 * 100} xgbWins={xgb.f1 >= comm.f1} />
+            <MetricBar label="FPR" xgbValue={xgb.fpr * 100} commValue={comm.fpr * 100} xgbWins={xgb.fpr <= comm.fpr} invertWin />
           </div>
 
-          <p className="section-label text-[9px] pt-2 border-t" style={{ color: "rgba(100,116,139,0.3)", borderColor: "rgba(0,212,255,0.05)" }}>
+          <p className="section-label text-[9px] pt-2 border-t" style={{ color: "rgba(148,163,184,0.5)", borderColor: "rgba(0,212,255,0.05)" }}>
             {evaluation.total_flows.toLocaleString("en-US")} FLOWS EVALUATED · GROUND TRUTH LABELS
           </p>
         </div>

@@ -1,5 +1,5 @@
 ﻿---------------------------------------------------------------------------
--- snort_combined.lua â€” Combined Run Config
+-- snort_combined.lua â€" Combined Run Config
 -- Bitirme Projesi: IDS Performans KarÅŸÄ±laÅŸtÄ±rma
 -- AynÄ± anda: ml_inspector (LSTM) + xgb_inspector (XGBoost) + Community Rules
 ---------------------------------------------------------------------------
@@ -9,7 +9,7 @@ EXTERNAL_NET = 'any'
 
 include 'snort_defaults.lua'
 
--- â”€â”€â”€ Inspection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- â"€â"€â"€ Inspection â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 stream = { } stream_ip = { } stream_icmp = { }
 stream_tcp = { } stream_udp = { } stream_user = { } stream_file = { }
 
@@ -35,7 +35,7 @@ file_policy  = { }
 js_norm      = default_js_norm
 appid        = { }
 
--- â”€â”€â”€ Bindings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- â"€â"€â"€ Bindings â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 wizard = default_wizard
 
 binder =
@@ -84,7 +84,7 @@ binder =
     { use = { type = 'wizard' } }
 }
 
--- â”€â”€â”€ Detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- â"€â"€â"€ Detection â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 references      = default_references
 classifications = default_classifications
 
@@ -100,24 +100,16 @@ ips =
     variables = default_variables
 }
 
--- â”€â”€â”€ Outputs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- â"€â"€â"€ Outputs â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 -- alert_csv'ye tÃ¼m alertler yazÄ±lÄ±r (GID ile ayÄ±rt edilir)
 alert_csv = { file = true }
 
--- â”€â”€â”€ Tweaks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- â"€â"€â"€ Tweaks â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 if ( tweaks ~= nil ) then
     include(tweaks .. '.lua')
 end
 
--- â”€â”€â”€ ML Inspector (LSTM) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-ml_inspector =
-{
-    threshold   = 0.55,
-    max_packets = 2,
-    model_path  = "/home/emirhan/bitirme/models/fine_tuned_lstm_model.tflite",
-}
-
--- â”€â”€â”€ DoS Inspector (per-flow XGBoost, GID:301) â€” v3b (15 features, CIC+UNSW mixed)
+-- â"€â"€â"€ DoS Inspector (per-flow XGBoost, GID:301) â€" v3b (15 features, CIC+UNSW mixed)
 dos_inspector =
 {
     threshold   = 0.90,
@@ -125,17 +117,17 @@ dos_inspector =
     model_path  = "/home/emirhan/bitirme/models/dos_fpr_opt_v3b.json",
 }
 
--- â”€â”€â”€ PortScan Inspector (TCP SYN cross-flow) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- â"€â"€â"€ PortScan Inspector (TCP SYN cross-flow) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 portscan_inspector =
 {
     threshold    = 0.90,
     model_path   = "/home/emirhan/bitirme/models/portscan_aggregator_model_v4d.json",
     window_sec   = 60,
     min_packets  = 5,
-    min_dst_ports = 30,
+    min_dst_ports = 1,
 }
 
--- â”€â”€â”€ DoS Aggregator (Cross-flow SYN rate) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- â"€â"€â"€ DoS Aggregator (Cross-flow SYN rate) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 dos_aggregator =
 {
     threshold    = 0.30,
@@ -144,22 +136,29 @@ dos_aggregator =
     min_syns     = 3,
 }
 
--- â”€â”€â”€ Botnet C2 Inspector (Cross-flow SYN per dst IP) â”€â”€
+-- â"€â"€â"€ DDoS Aggregator (Cross-flow SYN per dst IP, GID:304) â"€â"€
+ddos_aggregator =
+{
+    threshold    = 0.50,
+    model_path   = "/home/emirhan/bitirme/models/ddos_aggregator_model_v3.json",
+    window_sec   = 60,
+    min_packets  = 3,
+}
 
--- â”€â”€â”€ Bot Client Inspector (Per-src-IP outgoing SYN) â”€â”€
+-- â"€â"€â"€ Bot Client Inspector (Per-src-IP outgoing SYN) â"€â"€
 bot_client_inspector =
 {
     threshold    = 0.85,
-    model_path   = "/home/emirhan/bitirme/models/bot_client_model.json",
+    model_path   = "/home/emirhan/bitirme/models/bot_client_v4.json",
     window_sec   = 300,
     min_syns     = 3,
 }
 
--- â”€â”€â”€ Brute Force Inspector (Per-src-IP SYN, GID:307) â”€â”€
+-- â"€â"€â"€ Brute Force Inspector (Per-src-IP SYN, GID:307) â"€â"€
 bruteforce_inspector =
 {
-    threshold    = 0.85,
-    model_path   = "/home/emirhan/bitirme/models/bruteforce_model.json",
-    window_sec   = 60,
-    min_syns     = 5,
+    threshold    = 0.95,
+    model_path   = "/home/emirhan/bitirme/models/bruteforce_model_v3.json",
+    window_sec   = 120,
+    min_syns     = 3,
 }
