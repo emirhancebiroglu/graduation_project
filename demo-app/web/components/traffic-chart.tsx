@@ -13,7 +13,7 @@ import {
 import type { Alert } from "@/lib/types";
 import type { EngineMetrics } from "@/lib/use-ids-stream";
 
-const WINDOW_S = 90;
+const DEFAULT_WINDOW_S = 90;
 const TICK_MS = 250;
 
 type Bucket = { t: number; xgboost: number; community: number; total: number };
@@ -24,6 +24,7 @@ type Props = {
   snortRunning: boolean;
   replayStartedAt: number | null;
   pcapProgress: number;
+  pcapReplayWallS: number;
   alerts: Alert[];
 };
 
@@ -45,9 +46,9 @@ const ENGINE_LABELS: Record<string, string> = {
   community:  "Comm",
 };
 
-function buildEmptyBuckets(): Bucket[] {
-  return Array.from({ length: WINDOW_S }, (_, i) => ({
-    t: i - WINDOW_S + 1,
+function buildEmptyBuckets(windowS: number): Bucket[] {
+  return Array.from({ length: windowS }, (_, i) => ({
+    t: i,
     xgboost: 0,
     community: 0,
     total: 0,
@@ -101,9 +102,10 @@ function CustomTooltip({ active, payload, label }: {
   );
 }
 
-export function TrafficChart({ metrics, snortRunning, replayStartedAt, pcapProgress, alerts }: Props) {
+export function TrafficChart({ metrics, snortRunning, replayStartedAt, pcapProgress, pcapReplayWallS, alerts }: Props) {
   const [mounted, setMounted] = useState(false);
-  const [buckets, setBuckets] = useState<Bucket[]>(buildEmptyBuckets);
+  const [windowS, setWindowS] = useState(DEFAULT_WINDOW_S);
+  const [buckets, setBuckets] = useState<Bucket[]>(() => buildEmptyBuckets(DEFAULT_WINDOW_S));
   const [eventMarkers, setEventMarkers] = useState<EventMarker[]>([]);
   const [peakBucket, setPeakBucket] = useState<{ t: number; val: number } | null>(null);
   const [replayEnded, setReplayEnded] = useState(false);
@@ -121,13 +123,17 @@ export function TrafficChart({ metrics, snortRunning, replayStartedAt, pcapProgr
   const prevTotals = useRef<Record<"xgboost" | "community", number>>({ xgboost: 0, community: 0 });
   const seenEngines = useRef<Set<string>>(new Set());
   const eventMarkersRef = useRef<EventMarker[]>([]);
+  const windowSRef = useRef(DEFAULT_WINDOW_S);
 
   useEffect(() => {
     if (snortRunning && !prevRunning.current) {
       const nowMs = Date.now();
       replayStartMs.current = replayStartedAt ?? nowMs;
       replayStartSec.current = Math.floor((replayStartedAt ?? nowMs) / 1000);
-      setBuckets(buildEmptyBuckets());
+      const initWindow = DEFAULT_WINDOW_S;
+      windowSRef.current = initWindow;
+      setWindowS(initWindow);
+      setBuckets(buildEmptyBuckets(initWindow));
       frozenBuckets.current = null;
       replayEndedRef.current = false;
       setReplayEnded(false);
@@ -146,6 +152,15 @@ export function TrafficChart({ metrics, snortRunning, replayStartedAt, pcapProgr
     }
     prevRunning.current = snortRunning;
   }, [snortRunning, replayStartedAt]);
+
+  // Lock in final window size once Snort wall-clock is known
+  useEffect(() => {
+    if (pcapReplayWallS > 0) {
+      const w = Math.ceil(pcapReplayWallS) + 10;
+      windowSRef.current = w;
+      setWindowS(w);
+    }
+  }, [pcapReplayWallS]);
 
   // Track new engine types from alerts → event markers
   useEffect(() => {
@@ -192,10 +207,24 @@ export function TrafficChart({ metrics, snortRunning, replayStartedAt, pcapProgr
       const elapsed = nowSec - startSec;
       setElapsedSec(elapsed);
 
+      // Expand window dynamically as elapsed grows, until pcapReplayWallS is known
+      setWindowS((prev) => {
+        const needed = elapsed + 15;
+        return needed > prev ? needed : prev;
+      });
+
       const cutoff = startSec - 10;
       for (const k of pending.current.keys()) { if (k < cutoff) pending.current.delete(k); }
 
-      const next: Bucket[] = Array.from({ length: WINDOW_S }, (_, i) => {
+      // Grow window dynamically until pcapReplayWallS is received
+      const needed = elapsed + 15;
+      if (needed > windowSRef.current) {
+        windowSRef.current = needed;
+        setWindowS(needed);
+      }
+      const currentWindow = windowSRef.current;
+
+      const next: Bucket[] = Array.from({ length: currentWindow }, (_, i) => {
         const sec = startSec + i;
         const counts = pending.current.get(sec) ?? { xgboost: 0, community: 0 };
         return {
@@ -206,7 +235,6 @@ export function TrafficChart({ metrics, snortRunning, replayStartedAt, pcapProgr
         };
       });
 
-      // Find peak
       let peak = { t: 0, val: 0 };
       for (const bk of next) {
         const v = bk.xgboost + bk.community;
@@ -226,10 +254,10 @@ export function TrafficChart({ metrics, snortRunning, replayStartedAt, pcapProgr
   const maxVal = Math.max(...buckets.map((b) => b.xgboost + b.community), 1);
   const yDomain: [number, number | string] = maxVal < 3 ? [0, 5] : [0, "auto"];
   const showWaiting = !hasData && !hasEverReplayed;
-  const xDomain: [number, number] = [0, WINDOW_S - 1];
+  const xDomain: [number, number] = [0, windowS - 1];
 
-  // Cursor position from pcapProgress
-  const cursorT = snortRunning ? Math.round(pcapProgress * (WINDOW_S - 1)) : null;
+  // Cursor position from pcapProgress — clamp to valid range
+  const cursorT = snortRunning ? Math.min(Math.round(pcapProgress * (windowS - 1)), windowS - 1) : null;
 
   return (
     <div className="relative overflow-hidden" style={{ border: "1px solid rgba(0,212,255,0.1)", background: "#0f1318" }}>

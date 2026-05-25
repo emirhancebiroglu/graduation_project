@@ -33,6 +33,13 @@ DAILY_CSVS: dict[str, list[str]] = {
         "Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv",
         "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv",
     ],
+    # composite = wednesday DoS + friday PortScan/DDoS/Bot slices (no tuesday — synthetic bruteforce has no GT)
+    "composite": [
+        "Wednesday-workingHours.pcap_ISCX.csv",
+        "Friday-WorkingHours-Morning.pcap_ISCX.csv",
+        "Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv",
+        "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv",
+    ],
 }
 
 # Legacy — kept for backward compat
@@ -44,6 +51,8 @@ DEFAULT_CSV_DIR = Path.home() / "bitirme/data/raw/cicids2017"
 def _day_from_pcap(pcap_path: str) -> str:
     """Infer day key from PCAP filename (case-insensitive)."""
     name = pcap_path.lower()
+    if "composite" in name:
+        return "composite"
     for day in DAILY_CSVS:
         if day in name:
             return day

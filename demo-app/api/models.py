@@ -17,9 +17,8 @@ class Engine(str, Enum):
 
 
 class PcapName(str, Enum):
-    normal_2min = "normal_2min"
-    dos_hulk_2min = "dos_hulk_2min"
     full_wednesday = "full_wednesday"
+    demo_composite = "demo_composite"
 
 
 class Proto(str, Enum):
@@ -78,6 +77,7 @@ class ComparisonSnapshot(BaseModel):
 class StatusPayload(BaseModel):
     snort_running: bool
     pcap_progress: float             # 0.0..1.0
+    pcap_replay_wall_s: float = 0.0  # actual wall-clock replay duration (set after Snort exits)
     error: str | None = None
 
 

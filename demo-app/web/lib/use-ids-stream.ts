@@ -14,6 +14,7 @@ export type IdsStreamState = {
   connected: boolean;
   snortRunning: boolean;
   pcapProgress: number;
+  pcapReplayWallS: number;
   error: string | null;
   pcapProgressVisible: boolean;
   replayPhase: ReplayPhase;
@@ -27,6 +28,7 @@ export function useIdsStream(): IdsStreamState {
   const [connected, setConnected] = useState(false);
   const [snortRunning, setSnortRunning] = useState(false);
   const [pcapProgress, setPcapProgress] = useState(0);
+  const [pcapReplayWallS, setPcapReplayWallS] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [replayPhase, setReplayPhase] = useState<ReplayPhase>("idle");
   const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
@@ -38,20 +40,23 @@ export function useIdsStream(): IdsStreamState {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const completionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevRunning = useRef(false);
   const recentAlertsRef = useRef<Alert[]>([]);
   const alertsRef = useRef<Alert[]>([]);
   const engineAlertsRef = useRef<Record<CoreEngine, Alert[]>>({ xgboost: [], community: [] });
   const pendingFlush = useRef(false);
 
-  const handleStatus = useCallback((running: boolean, progress: number, err: string | null | undefined) => {
+  const handleStatus = useCallback((running: boolean, progress: number, wallS: number, err: string | null | undefined) => {
     setSnortRunning(running);
     setPcapProgress(progress);
+    if (wallS > 0) setPcapReplayWallS(wallS);
     setError(err ?? null);
 
     if (running && !prevRunning.current) {
       setReplayPhase("running");
       setPcapProgressVisible(true);
+      setPcapReplayWallS(0);
       setEvaluation(null);
       recentAlertsRef.current = [];
       setRecentAlerts([]);
@@ -61,11 +66,19 @@ export function useIdsStream(): IdsStreamState {
       setEngineAlerts({ xgboost: [], community: [] });
     } else if (!running && prevRunning.current) {
       setPcapProgressVisible(false);
+      // If evaluation message doesn't arrive within 5s, transition to "complete" anyway
+      // (handles composite mode where evaluation is skipped)
+      if (completionTimer.current) clearTimeout(completionTimer.current);
+      completionTimer.current = setTimeout(() => {
+        setReplayPhase((p) => (p === "running" || p === "evaluating" ? "complete" : p));
+        setSnortRunning(false);
+      }, 5000);
     }
     prevRunning.current = running;
   }, []);
 
   const handleEvaluation = useCallback((data: EvaluationResult) => {
+    if (completionTimer.current) { clearTimeout(completionTimer.current); completionTimer.current = null; }
     setEvaluation(data);
     setReplayPhase("complete");
     setSnortRunning(false);
@@ -98,6 +111,7 @@ export function useIdsStream(): IdsStreamState {
             handleStatus(
               msg.data.snort_running,
               msg.data.pcap_progress ?? 0,
+              msg.data.pcap_replay_wall_s ?? 0,
               msg.data.error
             );
           } else if (msg.type === "evaluation") {
@@ -150,6 +164,7 @@ export function useIdsStream(): IdsStreamState {
     return () => {
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       if (flushTimer.current) clearTimeout(flushTimer.current);
+      if (completionTimer.current) clearTimeout(completionTimer.current);
       wsRef.current?.close();
     };
   }, [connect]);
@@ -158,6 +173,7 @@ export function useIdsStream(): IdsStreamState {
     connected,
     snortRunning,
     pcapProgress,
+    pcapReplayWallS,
     error,
     pcapProgressVisible,
     replayPhase,

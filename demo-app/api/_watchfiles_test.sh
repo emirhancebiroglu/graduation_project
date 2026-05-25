@@ -3,9 +3,9 @@ set -e
 cd ~/bitirme/demo-app/api
 source .venv/bin/activate
 
-# Start a dos_hulk replay
+# Start a wednesday replay
 RESP=$(curl -s -X POST http://localhost:8000/api/replay/start \
-  -H "Content-Type: application/json" -d '{"pcap":"dos_hulk_2min"}')
+  -H "Content-Type: application/json" -d '{"pcap":"full_wednesday"}')
 echo "start: $RESP"
 RUN_ID=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['run_id'])")
 echo "run_id=$RUN_ID"

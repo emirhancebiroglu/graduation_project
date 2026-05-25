@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import type { Alert, Engine, CoreEngine, ShapContribution } from "@/lib/types";
 
-type Filter = "all" | "xgboost" | "community";
+type Filter = "all" | "ml" | "community";
 
 type Props = {
   alerts: Alert[];
@@ -22,11 +22,14 @@ type Severity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
 function getSeverity(alert: Alert): Severity {
   if (alert.engine === "community") return "LOW";
   const s = alert.score;
-  if (typeof s !== "number") return "LOW";
-  if (s >= 0.95) return "CRITICAL";
-  if (s >= 0.85) return "HIGH";
-  if (s >= 0.70) return "MEDIUM";
-  return "LOW";
+  if (typeof s === "number") {
+    if (s >= 0.95) return "CRITICAL";
+    if (s >= 0.85) return "HIGH";
+    if (s >= 0.70) return "MEDIUM";
+    return "LOW";
+  }
+  // No score: ML engine fired but score unavailable — treat as MEDIUM (confirmed detection)
+  return "MEDIUM";
 }
 
 const _SEVERITY_STYLE: Record<Severity, { color: string; border: string; bg: string; dot: string }> = {
@@ -107,12 +110,22 @@ function scoreLabel(alert: Alert): string {
   return typeof alert.score === "number" ? alert.score.toFixed(3) : "—";
 }
 
+const _ENGINE_LABEL: Record<string, string> = {
+  xgboost:    "DoS Inspector (XGBoost)",
+  portscan:   "Port Scan Inspector",
+  dos_agg:    "DoS Aggregator",
+  bot:        "Bot Client Inspector",
+  bruteforce: "Brute Force Inspector",
+  community:  "Community Rules",
+};
+
 function scoreBand(alert: Alert): string {
   if (alert.engine === "community") return "Community rule match";
-  if (alert.score === undefined) return "XGBoost (no score)";
-  if (alert.score >= 0.95) return "Critical (score ≥ 0.95)";
-  if (alert.score >= 0.85) return "High (score ≥ 0.85)";
-  if (alert.score >= 0.70) return "Medium (score ≥ 0.70)";
+  const engineLabel = _ENGINE_LABEL[alert.engine] ?? alert.engine;
+  if (alert.score == null) return `${engineLabel} (threshold exceeded)`;
+  if (alert.score >= 0.95) return `Critical (score ≥ 0.95)`;
+  if (alert.score >= 0.85) return `High (score ≥ 0.85)`;
+  if (alert.score >= 0.70) return `Medium (score ≥ 0.70)`;
   return "Low";
 }
 
@@ -181,13 +194,16 @@ function ifBadge(ifLabel: string | null | undefined): React.ReactNode {
 
 const FILTERS: { label: string; value: Filter }[] = [
   { label: "ALL", value: "all" },
-  { label: "ML ENSEMBLE", value: "xgboost" },
+  { label: "ML", value: "ml" },
   { label: "COMMUNITY", value: "community" },
 ];
 
 export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState<Alert | null>(null);
+  const [paused, setPaused] = useState(false);
+  const [frozenAlerts, setFrozenAlerts] = useState<Alert[]>([]);
+  const [frozenEngineAlerts, setFrozenEngineAlerts] = useState<Record<CoreEngine, Alert[]>>({ xgboost: [], community: [] });
   const [userScrolled, setUserScrolled] = useState(false);
   const [shap, setShap] = useState<ShapContribution[] | null>(null);
   const [shapNarrative, setShapNarrative] = useState<string | null>(null);
@@ -195,6 +211,18 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
   const [shapError, setShapError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const prevAlertCount = useRef(alerts.length);
+
+  // Freeze/unfreeze feed
+  const liveAlerts = paused ? frozenAlerts : alerts;
+  const liveEngineAlerts = paused ? frozenEngineAlerts : engineAlerts;
+
+  function handlePauseToggle() {
+    if (!paused) {
+      setFrozenAlerts([...alerts]);
+      setFrozenEngineAlerts({ ...engineAlerts });
+    }
+    setPaused((p) => !p);
+  }
 
   async function fetchShap(alertId: string) {
     setShapLoading(true);
@@ -226,22 +254,24 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
     setShapLoading(false);
   }
 
-  // Use per-engine buffer for XGBOOST/COMMUNITY filters so community alerts are never
-  // squeezed out of the combined 1000-cap array by the high XGBoost volume.
+  // ml → xgboost bucket (all non-community engines); community → community bucket
   const filtered =
     filter === "all"
-      ? alerts
-      : engineAlerts[filter as CoreEngine];
+      ? liveAlerts
+      : filter === "ml"
+      ? liveEngineAlerts.xgboost
+      : liveEngineAlerts.community;
   const displayed = filtered.slice(0, 200);
 
   useEffect(() => {
+    if (paused) return;
     if (alerts.length === prevAlertCount.current) return;
     prevAlertCount.current = alerts.length;
     if (!userScrolled && scrollRef.current) scrollRef.current.scrollTop = 0;
-  }, [alerts.length, userScrolled]);
+  }, [alerts.length, userScrolled, paused]);
 
   useEffect(() => {
-    if (alerts.length === 0) setUserScrolled(false);
+    if (alerts.length === 0) { setUserScrolled(false); setPaused(false); }
   }, [alerts.length]);
 
   function handleScroll(e: React.UIEvent<HTMLDivElement>) {
@@ -273,7 +303,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
           {displayed.length}/{filtered.length}
         </span>
         <div className="ml-auto flex items-center gap-2">
-          {userScrolled && (
+          {userScrolled && !paused && (
             <button
               onClick={() => { setUserScrolled(false); if (scrollRef.current) scrollRef.current.scrollTop = 0; }}
               className="text-[10px] font-mono"
@@ -282,6 +312,18 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
               ↑ TOP
             </button>
           )}
+          <button
+            onClick={handlePauseToggle}
+            className="text-[10px] font-mono px-2 py-1 transition-all"
+            style={{
+              border: `1px solid ${paused ? "rgba(245,158,11,0.5)" : "rgba(0,212,255,0.25)"}`,
+              background: paused ? "rgba(245,158,11,0.08)" : "transparent",
+              color: paused ? "#f59e0b" : "rgba(148,163,184,0.75)",
+              letterSpacing: "0.08em",
+            }}
+          >
+            {paused ? "⏸ PAUSED" : "⏸ PAUSE"}
+          </button>
           <button
             onClick={onClear}
             className="text-[10px] font-mono px-2 py-1 transition-all"
@@ -380,6 +422,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
             <div className="space-y-4 text-sm">
               <div className="rounded-none p-3 space-y-1.5" style={{ background: "rgba(0,212,255,0.03)", border: "1px solid rgba(0,212,255,0.1)" }}>
                 <Row label="TIME" value={new Date(selected.ts).toISOString()} />
+                <Row label="ENGINE" value={_ENGINE_LABEL[selected.engine] ?? selected.engine} />
                 <Row label="SOURCE" value={`${selected.src_ip}:${selected.src_port}`} />
                 <Row label="DESTINATION" value={`${selected.dst_ip}:${selected.dst_port}`} />
                 <Row label="PROTOCOL" value={selected.proto} />
@@ -421,8 +464,8 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
                 )}
               </div>
 
-              {/* SHAP Explain — XGBoost only */}
-              {selected.engine === "xgboost" && (
+              {/* SHAP Explain — GID:301 (dos_inspector xgboost) only */}
+              {selected.gid === 301 && (
                 <div className="space-y-2">
                   {/* Narrative — always visible after fetch */}
                   {shapNarrative && (

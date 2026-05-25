@@ -68,7 +68,7 @@ export type EvaluationResult = {
 export type WsMessage =
   | { type: "alert"; engine: Engine; data: Alert }
   | { type: "metric"; engine: Engine; data: Metrics }
-  | { type: "status"; data: { snort_running: boolean; pcap_progress: number; error?: string | null } }
+  | { type: "status"; data: { snort_running: boolean; pcap_progress: number; pcap_replay_wall_s?: number; error?: string | null } }
   | { type: "comparison"; data: ComparisonSnapshot }
   | { type: "alert_counts"; data: AlertCounts }
   | { type: "evaluation"; data: EvaluationResult };

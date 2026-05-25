@@ -1,5 +1,5 @@
 "use client";
-import type { EvaluationResult } from "@/lib/types";
+import type { Alert, EvaluationResult } from "@/lib/types";
 import type { ReplayPhase } from "@/lib/use-ids-stream";
 
 type FrozenMetrics = {
@@ -13,6 +13,8 @@ type Props = {
   replayPhase: ReplayPhase;
   pcapProgress: number;
   frozenMetrics?: FrozenMetrics | null;
+  pcapMode?: string;
+  alerts?: Alert[];
 };
 
 function fmtN(n: number): string {
@@ -32,46 +34,137 @@ function FpBar({ label, value, max, color }: { label: string; value: number; max
   );
 }
 
-export function ImpactSummary({ evaluation, replayPhase, pcapProgress, frozenMetrics }: Props) {
+export function ImpactSummary({ evaluation, replayPhase, pcapProgress, frozenMetrics, pcapMode, alerts = [] }: Props) {
   const xgbFP = frozenMetrics?.xgb_FP ?? 7393;
   const commFP = frozenMetrics?.community_FP ?? 36633;
   const fpGapBaseline = frozenMetrics?.fp_gap ?? (commFP - xgbFP);
-  const isIdle = !evaluation;
   const isRunning = replayPhase === "running";
+  const isComposite = pcapMode === "demo_composite";
 
-  if (isIdle && !isRunning) {
+  // Composite complete MUST be checked before isIdle — evaluation is always null for composite
+  if (!evaluation && isComposite && replayPhase === "complete") {
+    const engineCounts: Record<string, number> = {};
+    for (const a of alerts) {
+      engineCounts[a.engine] = (engineCounts[a.engine] ?? 0) + 1;
+    }
+    const mlTotal = alerts.filter((a) => a.engine !== "community").length;
+    const commTotal = engineCounts["community"] ?? 0;
+
+    const ENGINE_DEFS: { key: string; label: string; color: string; description: string }[] = [
+      { key: "xgboost",    label: "DoS Inspector",     color: "#00d4ff",  description: "Flow-level DoS / DDoS" },
+      { key: "dos_agg",    label: "DoS Aggregator",    color: "#38bdf8",  description: "Volumetric flood bursts" },
+      { key: "portscan",   label: "Port Scan",         color: "#a78bfa",  description: "Reconnaissance sweeps" },
+      { key: "bruteforce", label: "Brute Force",       color: "#f472b6",  description: "Auth credential attacks" },
+      { key: "bot",        label: "Bot Client",        color: "#fb923c",  description: "C2 bot behaviour" },
+    ];
+
+    const maxCount = Math.max(1, ...ENGINE_DEFS.map((e) => engineCounts[e.key] ?? 0));
+
+    return (
+      <div className="relative overflow-hidden" style={{ border: "1px solid rgba(245,158,11,0.2)", background: "#0f1318", animation: "fadeIn 0.6s ease-in" }}>
+        <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+        <div className="absolute top-0 left-0 w-3 h-3 border-t border-l z-10" style={{ borderColor: "rgba(245,158,11,0.4)" }} />
+        <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r z-10" style={{ borderColor: "rgba(245,158,11,0.4)" }} />
+
+        <div className="flex items-center gap-3 px-5 py-3 border-b" style={{ borderColor: "rgba(245,158,11,0.1)" }}>
+          <div className="w-1 h-4" style={{ background: "rgba(245,158,11,0.7)", boxShadow: "0 0 8px rgba(245,158,11,0.6)" }} />
+          <span className="section-label" style={{ color: "#f59e0b" }}>MULTI-ATTACK SHOWCASE — DETECTION SUMMARY</span>
+          <span className="section-label ml-auto text-[9px]" style={{ color: "rgba(16,185,129,0.7)" }}>✓ REPLAY COMPLETE</span>
+        </div>
+
+        <div className="p-5 space-y-5">
+          <div className="space-y-2">
+            <p className="section-label text-[10px]" style={{ color: "rgba(0,212,255,0.4)" }}>ML INSPECTOR DETECTIONS — THIS RUN</p>
+            <div className="space-y-2">
+              {ENGINE_DEFS.map(({ key, label, color, description }) => {
+                const count = engineCounts[key] ?? 0;
+                const pct = Math.min((count / maxCount) * 100, 100);
+                return (
+                  <div key={key} className="flex items-center gap-3">
+                    <div className="w-28 shrink-0">
+                      <p className="text-[10px] font-mono font-semibold" style={{ color }}>{label}</p>
+                      <p className="text-[9px] font-mono" style={{ color: "rgba(148,163,184,0.45)" }}>{description}</p>
+                    </div>
+                    <div className="flex-1 h-2.5 rounded-sm overflow-hidden" style={{ background: "rgba(0,212,255,0.06)" }}>
+                      <div style={{
+                        width: `${pct}%`, height: "100%",
+                        background: count > 0 ? color : "transparent",
+                        boxShadow: count > 0 ? `0 0 8px ${color}60` : "none",
+                        transition: "width 1s ease",
+                      }} />
+                    </div>
+                    <span className="text-xs font-mono font-bold tabular-nums w-14 text-right" style={{ color: count > 0 ? color : "rgba(148,163,184,0.3)" }}>
+                      {count > 0 ? fmtN(count) : "—"}
+                    </span>
+                    {count > 0 ? (
+                      <span className="text-[9px] font-mono w-4" style={{ color: "#10b981" }}>✓</span>
+                    ) : (
+                      <span className="text-[9px] font-mono w-4" style={{ color: "rgba(148,163,184,0.2)" }}>·</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="pt-3 border-t space-y-2" style={{ borderColor: "rgba(0,212,255,0.08)" }}>
+            <p className="section-label text-[10px]" style={{ color: "rgba(0,212,255,0.4)" }}>SIGNAL-TO-NOISE — THIS RUN</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="px-4 py-3 rounded-sm" style={{ background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.1)" }}>
+                <p className="text-[9px] font-mono mb-1" style={{ color: "rgba(148,163,184,0.5)" }}>ML ENSEMBLE ALERTS</p>
+                <p className="text-2xl font-bold font-mono tabular-nums" style={{ color: "#00d4ff", textShadow: "0 0 12px rgba(0,212,255,0.4)" }}>
+                  {fmtN(mlTotal)}
+                </p>
+                <p className="text-[9px] font-mono mt-1" style={{ color: "rgba(148,163,184,0.45)" }}>5 specialist inspectors</p>
+              </div>
+              <div className="px-4 py-3 rounded-sm" style={{ background: "rgba(255,59,59,0.04)", border: "1px solid rgba(255,59,59,0.12)" }}>
+                <p className="text-[9px] font-mono mb-1" style={{ color: "rgba(148,163,184,0.5)" }}>COMMUNITY RULE ALERTS</p>
+                <p className="text-2xl font-bold font-mono tabular-nums" style={{ color: "#ff3b3b" }}>
+                  {fmtN(commTotal)}
+                </p>
+                <p className="text-[9px] font-mono mt-1" style={{ color: "rgba(148,163,184,0.45)" }}>signature-based</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-3 border-t" style={{ borderColor: "rgba(0,212,255,0.08)" }}>
+            <p className="section-label text-[10px] mb-2" style={{ color: "rgba(0,212,255,0.4)" }}>FALSE ALARM RATE — WEDNESDAY FULL-DAY REFERENCE</p>
+            <div className="space-y-2">
+              <FpBar label="ML Ensemble" value={xgbFP} max={commFP} color="#64748b" />
+              <FpBar label="Community"   value={commFP} max={commFP} color="#ff3b3b" />
+            </div>
+            <div className="text-right pt-1">
+              <span className="text-xs font-mono font-semibold" style={{ color: "#10b981" }}>
+                −{fmtN(fpGapBaseline)} fewer false alarms ({((fpGapBaseline / commFP) * 100).toFixed(1)}% reduction)
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Idle skeleton (no evaluation, not running, not composite-complete)
+  if (!evaluation && !isRunning) {
     return (
       <div className="relative overflow-hidden" style={{ border: "1px solid rgba(245,158,11,0.15)", background: "#0f1318" }}>
         <style>{`
-          @keyframes skeletonPulse {
-            0%, 100% { opacity: 0.4; }
-            50% { opacity: 0.9; }
-          }
+          @keyframes skeletonPulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.9; } }
           .skel { animation: skeletonPulse 1.5s ease-in-out infinite; }
         `}</style>
         <div className="absolute top-0 left-0 w-3 h-3 border-t border-l z-10" style={{ borderColor: "rgba(245,158,11,0.3)" }} />
         <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r z-10" style={{ borderColor: "rgba(245,158,11,0.3)" }} />
-
         <div className="flex items-center gap-3 px-5 py-3 border-b" style={{ borderColor: "rgba(245,158,11,0.1)" }}>
           <div className="w-1 h-4 skel" style={{ background: "rgba(245,158,11,0.7)" }} />
           <span className="section-label" style={{ color: "#f59e0b" }}>ROI ANALYSIS — BUSINESS IMPACT</span>
         </div>
-
         <div className="p-6 space-y-6">
-          <div className="text-center py-5 px-4 rounded-sm skel"
-            style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.15)" }}>
-            <p className="text-[11px] font-mono uppercase tracking-widest mb-3" style={{ color: "rgba(245,158,11,0.3)" }}>
-              Analyst Time Recovered
-            </p>
-            <p className="text-4xl font-bold tabular-nums leading-none skel" style={{ color: "rgba(245,158,11,0.4)", letterSpacing: "-0.03em" }}>
-              ~--h
-            </p>
+          <div className="text-center py-5 px-4 rounded-sm skel" style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.15)" }}>
+            <p className="text-[11px] font-mono uppercase tracking-widest mb-3" style={{ color: "rgba(245,158,11,0.3)" }}>Analyst Time Recovered</p>
+            <p className="text-4xl font-bold tabular-nums leading-none skel" style={{ color: "rgba(245,158,11,0.4)", letterSpacing: "-0.03em" }}>~--h</p>
           </div>
-
           <div className="space-y-3">
-            <p className="section-label text-[10px] skel" style={{ color: "rgba(0,212,255,0.2)" }}>
-              FALSE ALARM COMPARISON
-            </p>
+            <p className="section-label text-[10px] skel" style={{ color: "rgba(0,212,255,0.2)" }}>FALSE ALARM COMPARISON</p>
             {[["ML Ensemble","#64748b"],["Community","#ff3b3b"]].map(([label, color]) => (
               <div key={label as string} className="flex items-center gap-3 skel">
                 <span className="text-[10px] font-mono w-20 shrink-0" style={{ color: "rgba(148,163,184,0.65)" }}>{label as string}</span>
@@ -80,11 +173,9 @@ export function ImpactSummary({ evaluation, replayPhase, pcapProgress, frozenMet
               </div>
             ))}
           </div>
-
           <div className="grid grid-cols-2 gap-3 pt-2 border-t skel" style={{ borderColor: "rgba(245,158,11,0.08)" }}>
             {[["#10b981","XGB ACCURACY"],["#00d4ff","XGB RECALL"]].map(([color, label]) => (
-              <div key={label as string} className="text-center py-3 rounded-sm"
-                style={{ background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.08)" }}>
+              <div key={label as string} className="text-center py-3 rounded-sm" style={{ background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.08)" }}>
                 <p className="text-lg font-bold font-mono tabular-nums" style={{ color: color as string, opacity: 0.4 }}>--%</p>
                 <p className="text-[9px] font-mono mt-0.5" style={{ color: "rgba(148,163,184,0.5)" }}>{label as string}</p>
               </div>

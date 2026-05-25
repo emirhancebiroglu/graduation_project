@@ -110,6 +110,7 @@ _tailer_tasks: list[asyncio.Task] = []
 # Track current run_dir for file-based line counts
 _current_run_dir: Path | None = None
 _active_run_id: str | None = None
+_current_pcap_name: str = "full_wednesday"  # set on replay start; controls eval skip
 
 
 def _count_alert_lines(path: Path) -> int:
@@ -195,6 +196,41 @@ except Exception as _e:
 _xgb_alert_seq: int = 0
 _xgb_log_features: list[list[float]] = []  # populated by log tailer
 
+# Per-engine sequential alert counters for log-based score extraction
+_engine_alert_seq: dict[str, int] = {}
+
+
+def _parse_score_from_alert_log(run_dir: Path, engine: Engine, src_ip: str) -> float | None:
+    """Extract ML score from snort_stdout.log for bot_client and bruteforce engines.
+
+    Bot format:   [botcl] ALERT: a.b.c.d score=0.9922
+    Brute format: [bfc] ALERT: a.b.c.d score=0.9921 syns=...
+
+    Scans log from end, returns most recent score for the given src_ip.
+    """
+    if _current_run_dir is None:
+        return None
+    log_path = _current_run_dir / "combined" / "snort_stdout.log"
+    if not log_path.exists():
+        return None
+
+    prefix = "[botcl] ALERT:" if engine == Engine.bot else "[bfc] ALERT:"
+    try:
+        with open(log_path) as f:
+            lines = f.readlines()
+        for line in reversed(lines):
+            if prefix not in line:
+                continue
+            if src_ip not in line:
+                continue
+            if "score=" in line:
+                idx = line.index("score=") + 6
+                end = line.find(" ", idx)
+                return float(line[idx:] if end == -1 else line[idx:end])
+    except Exception as exc:
+        logger.debug("score extract error (%s %s): %s", engine, src_ip, exc)
+    return None
+
 
 def _parse_log_entry(line: str) -> tuple[list[float], float | None] | None:
     """Extract (feature_vector, score) from dos_inspector LogMessage line.
@@ -269,7 +305,7 @@ async def ingest_alert(alert: Alert) -> None:
     label = _gt_loader.lookup(alert.src_ip, alert.src_port, alert.dst_ip, alert.dst_port, alert.proto.value)
     alert.ground_truth = label
 
-    # IF + SHAP enrichment for XGBoost alerts only
+    # Score + feature enrichment per engine
     if alert.engine == Engine.xgboost and _current_run_dir is not None:
         entry = await asyncio.to_thread(_read_next_log_entry, _current_run_dir, _xgb_alert_seq)
         if entry is not None:
@@ -285,8 +321,14 @@ async def ingest_alert(alert: Alert) -> None:
                 except Exception as exc:
                     logger.warning("IF score error (alert %d): %s", _xgb_alert_seq, exc)
         else:
-            logger.warning("XGB alert #%d: no feature vector found in snort_stdout.log", _xgb_alert_seq)
+            if _current_pcap_name != "demo_composite":
+                logger.warning("XGB alert #%d: no feature vector found in snort_stdout.log", _xgb_alert_seq)
         _xgb_alert_seq += 1
+
+    elif alert.engine in (Engine.bot, Engine.bruteforce) and _current_run_dir is not None:
+        score = await asyncio.to_thread(_parse_score_from_alert_log, _current_run_dir, alert.engine, alert.src_ip)
+        if score is not None:
+            alert.score = score
 
     _history.append(alert)
     if len(_history) > _HISTORY_MAX:
@@ -347,6 +389,7 @@ async def _status_broadcaster() -> None:
             data=StatusPayload(
                 snort_running=runner.is_running(),
                 pcap_progress=runner.pcap_progress(),
+                pcap_replay_wall_s=runner.replay_wall_clock_s,
                 error=state.error if state else None,
             )
         )
@@ -376,7 +419,9 @@ async def _force_evaluation() -> None:
     # 27 alerts × 0.2s retry = 5.4s worst case; use 8s to be safe
     await asyncio.sleep(8.0)
     _cancel_tailers()
-    if _current_run_dir is not None:
+    if _current_pcap_name == "demo_composite":
+        logger.info("Composite PCAP replay complete — skipping evaluation (no ground truth)")
+    elif _current_run_dir is not None:
         await _compute_and_broadcast_evaluation(_current_run_dir)
     else:
         logger.warning("_current_run_dir is None — cannot compute evaluation")
@@ -439,11 +484,12 @@ async def history() -> list[Alert]:
 
 @app.post("/api/replay/start", response_model=ReplayStartResponse)
 async def replay_start(body: ReplayRequest) -> ReplayStartResponse:
-    global _gt_loader
+    global _gt_loader, _current_pcap_name
     pcap_path = _PCAP_DIR / f"{body.pcap.value}.pcap"
     if not pcap_path.exists():
         raise HTTPException(status_code=400, detail=f"PCAP not found: {pcap_path}")
 
+    _current_pcap_name = body.pcap.value
     _gt_loader = get_ground_truth_loader_for_pcap(body.pcap.value)
     _gt_loader.ensure_loaded()
 
@@ -519,6 +565,7 @@ async def websocket_endpoint(ws: WebSocket) -> None:
             data=StatusPayload(
                 snort_running=runner.is_running(),
                 pcap_progress=runner.pcap_progress(),
+                pcap_replay_wall_s=runner.replay_wall_clock_s,
                 error=state.error if state else None,
             )
         ).model_dump_json()

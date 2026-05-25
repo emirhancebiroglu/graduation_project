@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useIdsStream } from "@/lib/use-ids-stream";
-import { AttackControl } from "@/components/attack-control";
+import { AttackControl, type PcapMode } from "@/components/attack-control";
 import { AlertFeed } from "@/components/alert-feed";
 import { EvaluationReport } from "@/components/evaluation-report";
 import { ImpactSummary } from "@/components/impact-summary";
@@ -17,11 +17,12 @@ type FrozenMetrics = {
 export default function Page() {
   const stream = useIdsStream();
   const [isStarting, setIsStarting] = useState(false);
-  const { connected, snortRunning, pcapProgress, replayPhase, evaluation, alerts, engineAlerts } = stream;
+  const { connected, snortRunning, pcapProgress, pcapReplayWallS, replayPhase, evaluation, alerts, engineAlerts } = stream;
   const [feedAlerts, setFeedAlerts] = useState(alerts);
   const [feedEngineAlerts, setFeedEngineAlerts] = useState(engineAlerts);
   const [frozenMetrics, setFrozenMetrics] = useState<FrozenMetrics | null>(null);
   const [replayStartedAt, setReplayStartedAt] = useState<number | null>(null);
+  const [pcapMode, setPcapMode] = useState<PcapMode>("full_wednesday");
 
   useEffect(() => {
     fetch("/api/config")
@@ -195,7 +196,9 @@ export default function Page() {
             }}
           >
             {replayPhase === "running"
-              ? "● LIVE DETECTION — CIC-IDS2017 WEDNESDAY"
+              ? pcapMode === "demo_composite"
+                ? "● LIVE DETECTION — MULTI-ATTACK SHOWCASE"
+                : "● LIVE DETECTION — CIC-IDS2017 WEDNESDAY"
               : replayPhase === "evaluating"
               ? "◌ COMPUTING EVALUATION…"
               : "✓ EVALUATION COMPLETE"}
@@ -227,10 +230,10 @@ export default function Page() {
       {/* ── MAIN CONTENT ── */}
       <div className="flex-1 p-5 flex flex-col gap-4">
         {/* ROI / Impact — hero section, most prominent */}
-        <ImpactSummary evaluation={evaluation} replayPhase={replayPhase} pcapProgress={pcapProgress} frozenMetrics={frozenMetrics} />
+        <ImpactSummary evaluation={evaluation} replayPhase={replayPhase} pcapProgress={pcapProgress} frozenMetrics={frozenMetrics} pcapMode={pcapMode} alerts={feedAlerts} />
 
         {/* Performance Metrics */}
-        <EvaluationReport evaluation={evaluation} />
+        <EvaluationReport evaluation={evaluation} pcapMode={pcapMode} />
 
         {/* Detection Coverage — all 5 models, locked metrics */}
         <DetectionCoverage />
@@ -239,6 +242,7 @@ export default function Page() {
         <AttackControl
           snortRunning={effectiveRunning}
           onStarting={(v) => setIsStarting(v)}
+          onPcapMode={(m) => setPcapMode(m)}
         />
 
         {/* Detection Timeline — alert rate chart with event markers */}
@@ -248,6 +252,7 @@ export default function Page() {
             snortRunning={effectiveRunning}
             replayStartedAt={replayStartedAt}
             pcapProgress={pcapProgress}
+            pcapReplayWallS={pcapReplayWallS}
             alerts={feedAlerts}
           />
         )}
@@ -288,7 +293,7 @@ export default function Page() {
       {/* Footer */}
       <footer className="px-6 py-2 flex items-center justify-between border-t" style={{ borderColor: "rgba(0,212,255,0.08)", background: "rgba(10,12,15,0.9)" }}>
         <span className="section-label" style={{ color: "rgba(0,212,255,0.2)" }}>
-          CYBERSENSE IDS // CIC-IDS2017 WEDNESDAY // ML ENSEMBLE + COMMUNITY RULES
+          CYBERSENSE IDS // {pcapMode === "demo_composite" ? "MULTI-ATTACK SHOWCASE" : "CIC-IDS2017 WEDNESDAY"} // ML ENSEMBLE + COMMUNITY RULES
         </span>
         {evaluation && (
           <span className="section-label" style={{ color: "rgba(0,212,255,0.2)" }}>

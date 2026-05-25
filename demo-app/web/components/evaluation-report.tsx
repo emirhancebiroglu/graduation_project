@@ -1,8 +1,9 @@
 "use client";
 import { useState } from "react";
 import type { EvaluationResult } from "@/lib/types";
+import type { PcapMode } from "@/components/attack-control";
 
-type Props = { evaluation: EvaluationResult | null };
+type Props = { evaluation: EvaluationResult | null; pcapMode?: PcapMode };
 
 function fmtN(n: number): string {
   return n.toLocaleString("en-US");
@@ -97,8 +98,30 @@ function MetricBar({ label, xgbValue, commValue, xgbWins, invertWin }: MetricBar
   );
 }
 
-export function EvaluationReport({ evaluation }: Props) {
+export function EvaluationReport({ evaluation, pcapMode }: Props) {
   const [open, setOpen] = useState(true);
+  const isComposite = pcapMode === "demo_composite";
+
+  // Composite mode: no ground truth — show N/A panel
+  if (isComposite) {
+    return (
+      <div className="relative overflow-hidden" style={{ border: "1px solid rgba(0,212,255,0.08)", background: "#0f1318", opacity: 0.65 }}>
+        <div className="absolute top-0 left-0 w-3 h-3 border-t border-l z-10" style={{ borderColor: "rgba(0,212,255,0.2)" }} />
+        <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r z-10" style={{ borderColor: "rgba(0,212,255,0.2)" }} />
+        <div className="flex items-center gap-3 px-5 py-2.5 border-b" style={{ borderColor: "rgba(0,212,255,0.06)" }}>
+          <div className="w-1 h-3.5" style={{ background: "rgba(0,212,255,0.3)" }} />
+          <span className="section-label text-[10px]" style={{ color: "rgba(0,212,255,0.4)" }}>
+            PERFORMANCE METRICS — N/A (MULTI-DAY REPLAY)
+          </span>
+        </div>
+        <div className="px-5 py-4 flex items-center gap-3">
+          <span className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.4)" }}>
+            Evaluation requires single-day ground truth labels. Run WEDNESDAY ANALYSIS to see TP/FP/FPR metrics.
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   if (!evaluation) {
     return (

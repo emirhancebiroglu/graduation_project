@@ -24,8 +24,8 @@ async def main() -> None:
     fake: list[dict] = []
 
     async with websockets.connect(WS) as ws:
-        print("WS connected. Starting dos_hulk_2min replay...")
-        resp = post("/api/replay/start", {"pcap": "dos_hulk_2min"})
+        print("WS connected. Starting full_wednesday replay...")
+        resp = post("/api/replay/start", {"pcap": "full_wednesday"})
         print(f"  run_id={resp['run_id']}")
 
         print("Collecting WS messages for 5s...")

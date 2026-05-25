@@ -24,18 +24,10 @@ _RUN_ROOT = Path("/tmp/demo-runs")
 
 # PCAP duration fallbacks (seconds) used when capinfos is unavailable
 _PCAP_DURATION_FALLBACK: dict[str, float] = {
-    "normal_2min": 120.0,
-    "dos_hulk_2min": 120.0,
     "full_wednesday": 28800.0,
+    "demo_composite": 7200.0,
 }
 
-# Actual wall-clock replay time at disk speed — used for progress bar accuracy.
-# Short PCAPs replay in ~1.5-3s regardless of PCAP content duration.
-PCAP_REPLAY_WALL_CLOCK: dict[str, float] = {
-    "normal_2min": 3.0,
-    "dos_hulk_2min": 3.0,
-    "full_wednesday": 180.0,
-}
 
 
 # ── State types ───────────────────────────────────────────────────────────────
@@ -72,6 +64,16 @@ def _xgboost_env() -> dict[str, str]:
 
 
 def _get_pcap_duration(pcap_path: str, pcap_name: str) -> float:
+    try:
+        r = subprocess.run(
+            ["capinfos", "-c", "-u", pcap_path],
+            capture_output=True, text=True, timeout=10,
+        )
+        for line in r.stdout.splitlines():
+            if "Capture duration" in line:
+                return float(line.split(":")[1].strip().split()[0])
+    except Exception:
+        pass
     return _PCAP_DURATION_FALLBACK.get(pcap_name, 120.0)
 
 
@@ -82,6 +84,7 @@ class SnortRunner:
         self._state: RunState | None = None
         self._proc: subprocess.Popen | None = None
         self._log_handles: list = []
+        self._replay_wall_clock_s: float = 0.0  # set when Snort exits
 
     # ── public interface ──────────────────────────────────────────────────────
 
@@ -92,12 +95,17 @@ class SnortRunner:
     def is_running(self) -> bool:
         return self._state is not None and self._state.status == RunStatus.running
 
+    @property
+    def replay_wall_clock_s(self) -> float:
+        """Actual wall-clock seconds Snort took to replay. 0 until Snort exits."""
+        return self._replay_wall_clock_s
+
     def pcap_progress(self) -> float:
         if self._state is None or self._state.status != RunStatus.running:
             return 0.0
         elapsed = (datetime.now(timezone.utc) - self._state.started_at).total_seconds()
-        wall_clock = PCAP_REPLAY_WALL_CLOCK.get(self._state.pcap_name, self._state.pcap_duration_s)
-        return min(elapsed / wall_clock, 1.0)
+        wall = self._replay_wall_clock_s if self._replay_wall_clock_s > 0 else elapsed + 1
+        return min(elapsed / wall, 0.99)  # cap at 0.99 until Snort exits
 
     async def start(
         self,
@@ -196,7 +204,13 @@ class SnortRunner:
         """Return True if the combined process has exited naturally (PCAP fully replayed)."""
         if self._proc is None:
             return False
-        return self._proc.poll() is not None
+        if self._proc.poll() is not None:
+            if self._state and self._replay_wall_clock_s == 0.0:
+                self._replay_wall_clock_s = (
+                    datetime.now(timezone.utc) - self._state.started_at
+                ).total_seconds()
+            return True
+        return False
 
     # ── private ───────────────────────────────────────────────────────────────
 
