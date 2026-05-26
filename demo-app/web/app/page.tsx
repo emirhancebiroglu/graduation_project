@@ -1,12 +1,38 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useIdsStream } from "@/lib/use-ids-stream";
-import { AttackControl } from "@/components/attack-control";
 import { AlertFeed } from "@/components/alert-feed";
 import { EvaluationReport } from "@/components/evaluation-report";
 import { ImpactSummary } from "@/components/impact-summary";
-import { TrafficChart } from "@/components/traffic-chart";
+// import { TrafficChart } from "@/components/traffic-chart";  // DISABLED
 import { DetectionCoverage } from "@/components/detection-coverage";
+import { ArcxIntegration } from "@/components/arcx-integration";
+import { AttackNarration } from "@/components/attack-narration";
+import { MitreMap } from "@/components/mitre-map";
+import { ThreatBriefing } from "@/components/threat-briefing";
+import { LanguageToggle } from "@/components/language-toggle";
+import { useT } from "@/lib/i18n";
+import { toast } from "sonner";
+import type { Engine, Alert } from "@/lib/types";
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+async function startReplay(): Promise<void> {
+  const res = await fetch(`${API}/api/replay/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pcap: "full_wednesday" }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.detail ?? `HTTP ${res.status}`);
+  }
+}
+
+async function stopReplay(): Promise<void> {
+  const res = await fetch(`${API}/api/replay/stop`, { method: "POST" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
 
 type FrozenMetrics = {
   xgb_FP: number;
@@ -15,13 +41,19 @@ type FrozenMetrics = {
 };
 
 export default function Page() {
+  const { t } = useT();
   const stream = useIdsStream();
   const [isStarting, setIsStarting] = useState(false);
-  const { connected, snortRunning, pcapProgress, replayPhase, evaluation, alerts, engineAlerts } = stream;
+  const { connected, snortRunning, pcapProgress, replayPhase, evaluation, alerts, engineAlerts, markStarted } = stream;
   const [feedAlerts, setFeedAlerts] = useState(alerts);
-  const [feedEngineAlerts, setFeedEngineAlerts] = useState(engineAlerts);
+  const [feedEngineAlerts, setFeedEngineAlerts] = useState<Record<Engine, Alert[]>>(engineAlerts);
   const [frozenMetrics, setFrozenMetrics] = useState<FrozenMetrics | null>(null);
   const [replayStartedAt, setReplayStartedAt] = useState<number | null>(null);
+
+  // On mount: stop any in-progress replay so UI always starts clean
+  useEffect(() => {
+    fetch(`${API}/api/replay/stop`, { method: "POST" }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/config")
@@ -38,10 +70,20 @@ export default function Page() {
       });
   }, []);
 
-  // Sync feed with stream but allow manual clear
+  // Debounced sync — batch UI updates at ~150ms, pass stream arrays directly
+  const throttleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingAlertsRef = useRef<Alert[]>(alerts);
+  const pendingEngineRef = useRef<Record<Engine, Alert[]>>(engineAlerts);
+
   useEffect(() => {
-    setFeedAlerts(alerts);
-    setFeedEngineAlerts(engineAlerts);
+    pendingAlertsRef.current = alerts;
+    pendingEngineRef.current = engineAlerts;
+    if (throttleRef.current) return;
+    throttleRef.current = setTimeout(() => {
+      throttleRef.current = null;
+      setFeedAlerts(pendingAlertsRef.current);
+      setFeedEngineAlerts(pendingEngineRef.current);
+    }, 150);
   }, [alerts, engineAlerts]);
 
   const [clockStr, setClockStr] = useState<string | null>(null);
@@ -52,6 +94,35 @@ export default function Page() {
     return () => clearInterval(id);
   }, []);
 
+  const [replayLoading, setReplayLoading] = useState<"start" | "stop" | null>(null);
+
+  async function handleStart() {
+    markStarted();
+    setReplayLoading("start");
+    setIsStarting(true);
+    try {
+      await startReplay();
+      toast.success(t("toast.started"));
+    } catch (err) {
+      setIsStarting(false);
+      toast.error(t("toast.startFail", { err: err instanceof Error ? err.message : String(err) }));
+    } finally {
+      setReplayLoading(null);
+    }
+  }
+
+  async function handleStop() {
+    setReplayLoading("stop");
+    try {
+      await stopReplay();
+      toast.success(t("toast.stopped"));
+    } catch (err) {
+      toast.error(t("toast.stopFail", { err: err instanceof Error ? err.message : String(err) }));
+    } finally {
+      setReplayLoading(null);
+    }
+  }
+
   const prevSnortRunning = useRef(false);
   useEffect(() => {
     if (snortRunning && isStarting) setIsStarting(false);
@@ -61,10 +132,21 @@ export default function Page() {
 
   const effectiveRunning = snortRunning || isStarting;
 
+  // chartMetrics — DISABLED (TrafficChart disconnected)
+  /*
   const chartMetrics = useMemo(() => ({
     xgboost:   { total: feedEngineAlerts.xgboost.length,   alertsPerSec: 0 },
     community: { total: feedEngineAlerts.community.length, alertsPerSec: 0 },
-  }), [feedEngineAlerts.xgboost.length, feedEngineAlerts.community.length]);
+    portscan:  { total: feedEngineAlerts.portscan.length,  alertsPerSec: 0 },
+    dos_agg:   { total: feedEngineAlerts.dos_agg.length,   alertsPerSec: 0 },
+    bot:       { total: feedEngineAlerts.bot.length,       alertsPerSec: 0 },
+    bruteforce:{ total: feedEngineAlerts.bruteforce.length,alertsPerSec: 0 },
+  }), [
+    feedEngineAlerts.xgboost.length, feedEngineAlerts.community.length,
+    feedEngineAlerts.portscan.length, feedEngineAlerts.dos_agg.length,
+    feedEngineAlerts.bot.length, feedEngineAlerts.bruteforce.length,
+  ]);
+  */
 
   return (
     <main className="flex min-h-screen flex-col" style={{ background: "#0a0c0f" }}>
@@ -93,20 +175,60 @@ export default function Page() {
           </div>
           <div>
             <h1 className="text-base font-semibold tracking-widest uppercase" style={{ fontFamily: '"IBM Plex Mono", monospace', color: "#e2e8f0", letterSpacing: "0.2em" }}>
-              CyberSense IDS
+              {t("header.title")}
             </h1>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="section-label">INTRUSION DETECTION SYSTEM</span>
+              <span className="section-label">{t("header.subtitle")}</span>
               <span className="section-label opacity-50">·</span>
-              <span className="section-label" style={{ color: "rgba(0,212,255,0.35)" }}>DEMO MODE</span>
+              <span className="section-label" style={{ color: "rgba(0,212,255,0.6)" }}>{t("header.demoMode")}</span>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="section-label tabular-nums" style={{ color: "rgba(0,212,255,0.35)" }}>
+          <LanguageToggle />
+          <span className="section-label tabular-nums" style={{ color: "rgba(0,212,255,0.6)" }}>
             {clockStr ? `${clockStr} UTC` : null}
           </span>
+
+          {/* ── REPLAY CONTROL ── */}
+          {!effectiveRunning ? (
+            <button
+              disabled={replayLoading !== null}
+              onClick={handleStart}
+              className="flex items-center gap-2.5 px-3 py-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{
+                border: "1px solid rgba(0,212,255,0.35)",
+                background: "rgba(0,212,255,0.06)",
+              }}
+            >
+              {replayLoading === "start" ? (
+                <span className="w-3 h-3 rounded-full border border-t-transparent animate-spin shrink-0" style={{ borderColor: "#00d4ff", borderTopColor: "transparent" }} />
+              ) : (
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <polygon points="1,0 10,5 1,10" fill="#00d4ff" />
+                </svg>
+              )}
+              <span className="section-label" style={{ color: "#00d4ff" }}>{t("header.runAnalysis")}</span>
+            </button>
+          ) : (
+            <button
+              disabled={replayLoading === "stop"}
+              onClick={handleStop}
+              className="flex items-center gap-2.5 px-3 py-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{
+                border: "1px solid rgba(255,59,59,0.35)",
+                background: "rgba(255,59,59,0.06)",
+              }}
+            >
+              {replayLoading === "stop" ? (
+                <span className="w-3 h-3 rounded-full border border-t-transparent animate-spin shrink-0" style={{ borderColor: "#ff3b3b", borderTopColor: "transparent" }} />
+              ) : (
+                <div className="w-2 h-2 shrink-0" style={{ background: "#ff3b3b" }} />
+              )}
+              <span className="section-label" style={{ color: "#ff3b3b" }}>{t("header.stop")}</span>
+            </button>
+          )}
 
           {/* ── ENGINE HEALTH CHIP ── */}
           <div
@@ -125,7 +247,7 @@ export default function Page() {
               }}
             />
             <span className="section-label" style={{ color: effectiveRunning ? "#10b981" : "rgba(148,163,184,0.5)" }}>
-              {effectiveRunning ? "5 INSPECTORS" : "STANDBY"}
+              {effectiveRunning ? t("header.inspectorsActive") : t("header.standby")}
             </span>
             <span className="section-label" style={{ color: "rgba(0,212,255,0.2)" }}>·</span>
             <span className="section-label tabular-nums" style={{ color: effectiveRunning ? "rgba(148,163,184,0.75)" : "rgba(148,163,184,0.35)" }}>
@@ -139,7 +261,7 @@ export default function Page() {
           >
             <span className="w-1.5 h-1.5 rounded-full" style={{ background: connected ? "#00d4ff" : "#ff3b3b", boxShadow: connected ? "0 0 6px #00d4ff" : "0 0 6px #ff3b3b" }} />
             <span className="section-label" style={{ color: connected ? "#00d4ff" : "#ff3b3b" }}>
-              {connected ? "CONNECTED" : "OFFLINE"}
+              {connected ? t("header.connected") : t("header.offline")}
             </span>
           </div>
         </div>
@@ -148,8 +270,8 @@ export default function Page() {
       {/* ── REPLAY PHASE INDICATOR ── */}
       {replayPhase === "idle" && (
         <div className="text-center py-2.5" style={{ background: "rgba(0,212,255,0.03)", borderBottom: "1px solid rgba(0,212,255,0.06)" }}>
-          <span className="section-label" style={{ color: "rgba(0,212,255,0.4)" }}>
-            SYSTEM IDLE — SELECT REPLAY TO BEGIN DEMONSTRATION
+          <span className="section-label" style={{ color: "rgba(0,212,255,0.7)" }}>
+            {t("phase.idle")}
           </span>
         </div>
       )}
@@ -161,13 +283,13 @@ export default function Page() {
             background:
               replayPhase === "complete"
                 ? "rgba(16,185,129,0.06)"
-                : replayPhase === "evaluating"
+                : replayPhase === "draining"
                 ? "rgba(245,158,11,0.06)"
                 : "rgba(0,212,255,0.04)",
             borderBottom: `1px solid ${
               replayPhase === "complete"
                 ? "rgba(16,185,129,0.2)"
-                : replayPhase === "evaluating"
+                : replayPhase === "draining"
                 ? "rgba(245,158,11,0.2)"
                 : "rgba(0,212,255,0.08)"
             }`,
@@ -176,7 +298,7 @@ export default function Page() {
           {replayPhase === "running" && (
             <div className="w-2 h-2 rounded-full" style={{ background: "#00d4ff", boxShadow: "0 0 8px #00d4ff", animation: "pulse 1.5s infinite" }} />
           )}
-          {replayPhase === "evaluating" && (
+          {replayPhase === "draining" && (
             <div className="w-2 h-2 rounded-full" style={{ background: "#f59e0b", boxShadow: "0 0 8px #f59e0b", animation: "pulse 1s infinite" }} />
           )}
           {replayPhase === "complete" && (
@@ -189,19 +311,19 @@ export default function Page() {
               color:
                 replayPhase === "complete"
                   ? "#10b981"
-                  : replayPhase === "evaluating"
+                  : replayPhase === "draining"
                   ? "#f59e0b"
                   : "#00d4ff",
             }}
           >
             {replayPhase === "running"
-              ? "● LIVE DETECTION — CIC-IDS2017 WEDNESDAY"
-              : replayPhase === "evaluating"
-              ? "◌ COMPUTING EVALUATION…"
-              : "✓ EVALUATION COMPLETE"}
+              ? t("phase.running")
+              : replayPhase === "draining"
+              ? t("phase.draining")
+              : t("phase.complete")}
           </span>
 
-          {replayPhase === "running" && (
+          {(replayPhase === "running" || replayPhase === "draining") && (
             <div
               className="absolute inset-x-0 bottom-0"
               style={{ height: "3px", overflow: "hidden" }}
@@ -214,8 +336,12 @@ export default function Page() {
                   right: 0,
                   height: "100%",
                   width: `${Math.round(pcapProgress * 100)}%`,
-                  background: "linear-gradient(90deg, #00d4ff 0%, #00d4ff 85%, rgba(0,212,255,0.2) 100%)",
-                  boxShadow: "0 0 12px rgba(0,212,255,0.7), 0 0 4px rgba(0,212,255,0.5)",
+                  background: replayPhase === "draining"
+                    ? "linear-gradient(90deg, #f59e0b 0%, #f59e0b 85%, rgba(245,158,11,0.2) 100%)"
+                    : "linear-gradient(90deg, #00d4ff 0%, #00d4ff 85%, rgba(0,212,255,0.2) 100%)",
+                  boxShadow: replayPhase === "draining"
+                    ? "0 0 12px rgba(245,158,11,0.7), 0 0 4px rgba(245,158,11,0.5)"
+                    : "0 0 12px rgba(0,212,255,0.7), 0 0 4px rgba(0,212,255,0.5)",
                   transition: "width 0.4s ease",
                 }}
               />
@@ -224,25 +350,21 @@ export default function Page() {
         </div>
       )}
 
+      {/* ── ATTACK NARRATION ── */}
+      <AttackNarration alerts={feedAlerts} replayPhase={replayPhase} replayStartedAt={replayStartedAt} />
+
       {/* ── MAIN CONTENT ── */}
       <div className="flex-1 p-5 flex flex-col gap-4">
+
         {/* ROI / Impact — hero section, most prominent */}
         <ImpactSummary evaluation={evaluation} replayPhase={replayPhase} pcapProgress={pcapProgress} frozenMetrics={frozenMetrics} />
 
         {/* Performance Metrics */}
         <EvaluationReport evaluation={evaluation} />
 
-        {/* Detection Coverage — all 5 models, locked metrics */}
-        <DetectionCoverage />
-
-        {/* Replay Control */}
-        <AttackControl
-          snortRunning={effectiveRunning}
-          onStarting={(v) => setIsStarting(v)}
-        />
-
-        {/* Detection Timeline — alert rate chart with event markers */}
-        {(feedAlerts.length > 0 || replayPhase === "running" || replayPhase === "complete") && (
+        {/* Detection Timeline — DISABLED (not working correctly) */}
+        {/*
+        {(feedAlerts.length > 0 || replayPhase === "running" || replayPhase === "draining" || replayPhase === "complete") && (
           <TrafficChart
             metrics={chartMetrics}
             snortRunning={effectiveRunning}
@@ -251,14 +373,15 @@ export default function Page() {
             alerts={feedAlerts}
           />
         )}
+        */}
 
         {/* Alert Feed — live alerts with IF anomaly tags + SHAP explain */}
-        {(feedAlerts.length > 0 || replayPhase === "running") && (
+        {(feedAlerts.length > 0 || replayPhase === "running" || replayPhase === "draining") && (
           <div
             className="relative"
             style={{
-              border: "1px solid rgba(0,212,255,0.12)",
-              background: "#0f1318",
+              border: `1px solid ${replayPhase === "draining" ? "rgba(245,158,11,0.2)" : "rgba(0,212,255,0.12)"}`,
+              background: replayPhase === "draining" ? "rgba(245,158,11,0.02)" : "#0f1318",
               minHeight: "320px",
               maxHeight: "480px",
               display: "flex",
@@ -267,18 +390,24 @@ export default function Page() {
           >
             <div className="absolute top-0 left-0 w-3 h-3 border-t border-l" style={{ borderColor: "rgba(0,212,255,0.3)" }} />
             <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r" style={{ borderColor: "rgba(0,212,255,0.3)" }} />
-            <div className="flex items-center gap-3 px-5 py-3 border-b" style={{ borderColor: "rgba(0,212,255,0.08)" }}>
+            <div className="flex items-center gap-3 px-5 py-3 border-b shrink-0" style={{ borderColor: "rgba(0,212,255,0.08)" }}>
               <div className="w-1 h-4" style={{ background: "rgba(0,212,255,0.7)", boxShadow: "0 0 8px rgba(0,212,255,0.4)" }} />
-              <span className="section-label" style={{ color: "#00d4ff" }}>LIVE ALERT FEED</span>
-              <span className="section-label ml-2 text-[9px]" style={{ color: "rgba(0,212,255,0.35)" }}>
-                {feedAlerts.length} alerts · click row to explain
+              <span className="section-label" style={{ color: replayPhase === "draining" ? "#f59e0b" : "#00d4ff" }}>
+                {replayPhase === "draining" ? t("alertFeedSection.finalizing") : t("alertFeedSection.live")}
+              </span>
+              <span className="section-label ml-2 text-[9px]" style={{ color: "rgba(0,212,255,0.65)" }}>
+                {feedAlerts.length} {t("alertFeedSection.countSuffix")}
               </span>
             </div>
             <div className="flex-1 overflow-hidden p-3">
               <AlertFeed
                 alerts={feedAlerts}
                 engineAlerts={feedEngineAlerts}
-                onClear={() => { setFeedAlerts([]); setFeedEngineAlerts({ xgboost: [], community: [] }); }}
+                replayPhase={replayPhase}
+                onClear={() => {
+                  setFeedAlerts([]);
+                  setFeedEngineAlerts({ xgboost: [], community: [], portscan: [], dos_agg: [], bot: [], bruteforce: [] });
+                }}
               />
             </div>
           </div>
@@ -287,8 +416,8 @@ export default function Page() {
 
       {/* Footer */}
       <footer className="px-6 py-2 flex items-center justify-between border-t" style={{ borderColor: "rgba(0,212,255,0.08)", background: "rgba(10,12,15,0.9)" }}>
-        <span className="section-label" style={{ color: "rgba(0,212,255,0.2)" }}>
-          CYBERSENSE IDS // CIC-IDS2017 WEDNESDAY // ML ENSEMBLE + COMMUNITY RULES
+        <span className="section-label" style={{ color: "rgba(0,212,255,0.55)" }}>
+          {t("footer.tag")}
         </span>
         {evaluation && (
           <span className="section-label" style={{ color: "rgba(0,212,255,0.2)" }}>
@@ -296,6 +425,15 @@ export default function Page() {
           </span>
         )}
       </footer>
+
+      {/* Fixed right-rail coverage drawer */}
+      <DetectionCoverage />
+      {/* Fixed left-rail ARCX integration drawer */}
+      <ArcxIntegration alerts={feedAlerts} />
+      {/* Bottom MITRE ATT&CK map */}
+      <MitreMap alerts={feedAlerts} />
+      {/* Fullscreen idle overlay — threat statistics */}
+      <ThreatBriefing replayPhase={replayPhase} />
     </main>
   );
 }

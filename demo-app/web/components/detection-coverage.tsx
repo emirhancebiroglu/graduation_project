@@ -1,9 +1,12 @@
 "use client";
+import { useState } from "react";
+import { useT } from "@/lib/i18n";
+
+type ModelKey = "dos" | "portscan" | "ddos" | "bot" | "bruteforce";
 
 type ModelEntry = {
-  name: string;
+  key: ModelKey;
   gid: number;
-  attack: string;
   dataset: string;
   recall: string;
   precision: string;
@@ -12,56 +15,11 @@ type ModelEntry = {
 };
 
 const MODELS: ModelEntry[] = [
-  {
-    name: "DoS Inspector",
-    gid: 301,
-    attack: "DoS / Slowloris / Hulk",
-    dataset: "CIC Wed",
-    recall: "99.99%",
-    precision: "97.16%",
-    fp: "FPR 1.68%",
-    status: "pass",
-  },
-  {
-    name: "PortScan",
-    gid: 302,
-    attack: "TCP SYN Port Scan",
-    dataset: "CIC Fri",
-    recall: "91% window",
-    precision: "FP = 0",
-    fp: "FP 0",
-    status: "pass",
-  },
-  {
-    name: "DDoS Aggregator",
-    gid: 304,
-    attack: "Distributed SYN / HTTP Flood",
-    dataset: "CIC Fri",
-    recall: "20 attack wins",
-    precision: "FP = 0",
-    fp: "FP 0",
-    status: "pass",
-  },
-  {
-    name: "Botnet Client",
-    gid: 306,
-    attack: "Botnet C2 Beaconing",
-    dataset: "CIC Fri",
-    recall: "85.7%",
-    precision: "75.0%",
-    fp: "FP ≤ 5",
-    status: "pass",
-  },
-  {
-    name: "Brute Force",
-    gid: 307,
-    attack: "SSH / FTP Brute Force",
-    dataset: "CIC Tue",
-    recall: "100%",
-    precision: "FPR ~0%",
-    fp: "FP ≤ 2",
-    status: "pass",
-  },
+  { key: "dos",        gid: 301, dataset: "CIC Wed", recall: "99.99%",      precision: "97.16%", fp: "FPR 1.68%", status: "pass" },
+  { key: "portscan",   gid: 302, dataset: "CIC Fri", recall: "91% window",  precision: "FP = 0", fp: "FP 0",      status: "pass" },
+  { key: "ddos",       gid: 304, dataset: "CIC Fri", recall: "20 attack wins", precision: "FP = 0", fp: "FP 0",   status: "pass" },
+  { key: "bot",        gid: 306, dataset: "CIC Fri", recall: "85.7%",       precision: "75.0%",  fp: "FP ≤ 5",   status: "pass" },
+  { key: "bruteforce", gid: 307, dataset: "CIC Tue", recall: "100%",        precision: "FPR ~0%", fp: "FP ≤ 2",  status: "pass" },
 ];
 
 const GID_COLOR: Record<number, { text: string; border: string; bg: string; glow: string }> = {
@@ -73,52 +31,43 @@ const GID_COLOR: Record<number, { text: string; border: string; bg: string; glow
 };
 
 function ModelCard({ m }: { m: ModelEntry }) {
+  const { t } = useT();
   const c = GID_COLOR[m.gid];
+  const name = t(`coverage.models.${m.key}`);
+  const attack = t(`coverage.attacks.${m.key}`);
   return (
     <div
       className="relative flex flex-col gap-2 p-3 overflow-hidden"
-      style={{
-        border: `1px solid ${c.border}`,
-        background: c.bg,
-        boxShadow: c.glow,
-      }}
+      style={{ border: `1px solid ${c.border}`, background: c.bg, boxShadow: c.glow }}
     >
-      {/* Corner brackets */}
       <div className="absolute top-0 left-0 w-2 h-2 border-t border-l" style={{ borderColor: c.border }} />
       <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r" style={{ borderColor: c.border }} />
 
-      {/* GID badge + name */}
       <div className="flex items-center gap-2">
-        <span
-          className="text-[9px] font-mono px-1.5 py-0.5 shrink-0"
-          style={{ background: c.border, color: c.text, letterSpacing: "0.08em" }}
-        >
+        <span className="text-[9px] font-mono px-1.5 py-0.5 shrink-0" style={{ background: c.border, color: c.text, letterSpacing: "0.08em" }}>
           GID:{m.gid}
         </span>
         <span className="text-[10px] font-mono font-semibold truncate" style={{ color: c.text, letterSpacing: "0.06em" }}>
-          {m.name.toUpperCase()}
+          {name.toUpperCase()}
         </span>
-        {/* Pass tick */}
         <span className="ml-auto text-[10px] font-mono" style={{ color: "#10b981" }}>✓</span>
       </div>
 
-      {/* Attack type */}
       <p className="text-[9px] font-mono leading-tight" style={{ color: "rgba(148,163,184,0.75)" }}>
-        {m.attack}
+        {attack}
       </p>
 
-      {/* Metrics row */}
       <div className="flex gap-3 mt-auto pt-1 border-t" style={{ borderColor: "rgba(255,255,255,0.04)" }}>
         <div>
-          <p className="text-[8px] font-mono" style={{ color: "rgba(148,163,184,0.45)" }}>RECALL</p>
+          <p className="text-[8px] font-mono" style={{ color: "rgba(148,163,184,0.45)" }}>{t("coverage.recall")}</p>
           <p className="text-[11px] font-mono font-semibold" style={{ color: c.text }}>{m.recall}</p>
         </div>
         <div>
-          <p className="text-[8px] font-mono" style={{ color: "rgba(148,163,184,0.45)" }}>PRECISION</p>
+          <p className="text-[8px] font-mono" style={{ color: "rgba(148,163,184,0.45)" }}>{t("coverage.precision")}</p>
           <p className="text-[11px] font-mono font-semibold" style={{ color: c.text }}>{m.precision}</p>
         </div>
         <div className="ml-auto text-right">
-          <p className="text-[8px] font-mono" style={{ color: "rgba(148,163,184,0.45)" }}>DATASET</p>
+          <p className="text-[8px] font-mono" style={{ color: "rgba(148,163,184,0.45)" }}>{t("coverage.dataset")}</p>
           <p className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.7)" }}>{m.dataset}</p>
         </div>
       </div>
@@ -127,40 +76,124 @@ function ModelCard({ m }: { m: ModelEntry }) {
 }
 
 export function DetectionCoverage() {
+  const { t } = useT();
+  const [open, setOpen] = useState(false);
+
   return (
-    <div
-      className="relative overflow-hidden"
-      style={{ border: "1px solid rgba(0,212,255,0.1)", background: "#0f1318" }}
-    >
-      {/* Corner brackets */}
-      <div className="absolute top-0 left-0 w-3 h-3 border-t border-l z-10" style={{ borderColor: "rgba(0,212,255,0.3)" }} />
-      <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r z-10" style={{ borderColor: "rgba(0,212,255,0.3)" }} />
+    <>
+      <style>{`
+        @keyframes slideInRight {
+          from { transform: translateX(100%); opacity: 0; }
+          to   { transform: translateX(0);    opacity: 1; }
+        }
+        @keyframes slideOutRight {
+          from { transform: translateX(0);    opacity: 1; }
+          to   { transform: translateX(100%); opacity: 0; }
+        }
+        .coverage-panel-open  { animation: slideInRight  0.22s cubic-bezier(0.16,1,0.3,1) forwards; }
+        .coverage-panel-close { animation: slideOutRight 0.18s cubic-bezier(0.4,0,1,1) forwards; }
+      `}</style>
 
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ borderColor: "rgba(0,212,255,0.08)" }}>
-        <div className="w-1 h-4" style={{ background: "rgba(16,185,129,0.8)", boxShadow: "0 0 6px rgba(16,185,129,0.5)" }} />
-        <span className="section-label" style={{ color: "#10b981" }}>DETECTION COVERAGE</span>
-        <span className="ml-auto text-[9px] font-mono" style={{ color: "rgba(16,185,129,0.6)" }}>
-          {MODELS.length}/{MODELS.length} MODELS ACTIVE
+      {/* Fixed trigger button — right edge, vertically centered */}
+      <button
+        onClick={() => setOpen(true)}
+        title={t("coverage.title")}
+        className="fixed z-40 flex flex-col items-center justify-center gap-1.5"
+        style={{
+          right: 0,
+          top: "50%",
+          transform: "translateY(-50%)",
+          width: "28px",
+          padding: "10px 0",
+          background: "rgba(10,12,15,0.95)",
+          border: "1px solid rgba(16,185,129,0.25)",
+          borderRight: "none",
+          borderRadius: "4px 0 0 4px",
+          boxShadow: "-2px 0 12px rgba(16,185,129,0.08)",
+          cursor: "pointer",
+        }}
+      >
+        {/* Shield icon */}
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M7 1L12.5 3.5V7C12.5 10 7 13 7 13C7 13 1.5 10 1.5 7V3.5L7 1Z"
+            stroke="#10b981" strokeWidth="1" fill="rgba(16,185,129,0.12)" />
+          <path d="M4.5 7L6.2 8.7L9.5 5.5" stroke="#10b981" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        {/* Rotated label */}
+        <span
+          className="text-[8px] font-mono tracking-widest"
+          style={{
+            color: "rgba(16,185,129,0.7)",
+            writingMode: "vertical-rl",
+            textOrientation: "mixed",
+            transform: "rotate(180deg)",
+            letterSpacing: "0.15em",
+          }}
+        >
+          {t("coverage.buttonLabel")}
         </span>
-      </div>
+        {/* Active dot */}
+        <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#10b981", boxShadow: "0 0 6px #10b981" }} />
+      </button>
 
-      {/* Cards grid */}
-      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
-        {MODELS.map((m) => (
-          <ModelCard key={m.gid} m={m} />
-        ))}
-      </div>
+      {/* Backdrop */}
+      {open && (
+        <div
+          className="fixed inset-0 z-40"
+          style={{ background: "rgba(0,0,0,0.35)" }}
+          onClick={() => setOpen(false)}
+        />
+      )}
 
-      {/* Footer note */}
-      <div className="px-4 py-2 border-t flex items-center gap-4" style={{ borderColor: "rgba(0,212,255,0.05)" }}>
-        <span className="text-[9px] font-mono" style={{ color: "rgba(148,163,184,0.35)" }}>
-          EVALUATED · CIC-IDS2017 · LOCKED METRICS
-        </span>
-        <span className="text-[9px] font-mono ml-auto" style={{ color: "rgba(16,185,129,0.4)" }}>
-          ALL CRITERIA MET ✓
-        </span>
-      </div>
-    </div>
+      {/* Drawer panel */}
+      {open && (
+        <div
+          className="fixed z-50 top-0 right-0 h-full coverage-panel-open flex flex-col"
+          style={{
+            width: "min(420px, 90vw)",
+            background: "rgba(10,12,15,0.98)",
+            borderLeft: "1px solid rgba(16,185,129,0.2)",
+            boxShadow: "-8px 0 40px rgba(0,0,0,0.6)",
+          }}
+        >
+          {/* Corner brackets */}
+          <div className="absolute top-0 left-0 w-3 h-3 border-t border-l z-10" style={{ borderColor: "rgba(16,185,129,0.4)" }} />
+          <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r z-10" style={{ borderColor: "rgba(16,185,129,0.4)" }} />
+
+          {/* Header */}
+          <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0" style={{ borderColor: "rgba(16,185,129,0.12)" }}>
+            <div className="w-1 h-4" style={{ background: "rgba(16,185,129,0.8)", boxShadow: "0 0 6px rgba(16,185,129,0.5)" }} />
+            <span className="section-label" style={{ color: "#10b981" }}>{t("coverage.title")}</span>
+            <span className="ml-auto text-[9px] font-mono" style={{ color: "rgba(16,185,129,0.6)" }}>
+              {t("coverage.modelsActive", { n: MODELS.length, total: MODELS.length })}
+            </span>
+            <button
+              onClick={() => setOpen(false)}
+              className="ml-2 flex items-center justify-center w-5 h-5"
+              style={{ border: "1px solid rgba(0,212,255,0.15)", background: "rgba(0,212,255,0.04)", color: "rgba(0,212,255,0.4)", fontSize: "10px", fontFamily: "monospace" }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Cards */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {MODELS.map((m) => (
+              <ModelCard key={m.gid} m={m} />
+            ))}
+          </div>
+
+          {/* Footer */}
+          <div className="px-4 py-2 border-t shrink-0 flex items-center gap-4" style={{ borderColor: "rgba(16,185,129,0.08)" }}>
+            <span className="text-[9px] font-mono" style={{ color: "rgba(148,163,184,0.35)" }}>
+              {t("coverage.footerEvaluated")}
+            </span>
+            <span className="text-[9px] font-mono ml-auto" style={{ color: "rgba(16,185,129,0.4)" }}>
+              {t("coverage.footerCriteriaMet")}
+            </span>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

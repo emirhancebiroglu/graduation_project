@@ -1,0 +1,231 @@
+{
+  "header": {
+    "title": "Aegis IDS",
+    "subtitle": "SİBER TEHDİT TESPİT SİSTEMİ",
+    "demoMode": "DEMO MODU",
+    "runAnalysis": "ANALİZİ BAŞLAT",
+    "stop": "DURDUR",
+    "inspectorsActive": "5 DEDEKTÖR",
+    "standby": "BEKLEMEDE",
+    "connected": "BAĞLI",
+    "offline": "ÇEVRİMDIŞI"
+  },
+  "phase": {
+    "idle": "SİSTEM HAZIR — DEMO BAŞLATMAK İÇİN ANALİZİ ÇALIŞTIRIN",
+    "running": "● CANLI TESPİT — CIC-IDS2017 WEDNESDAY",
+    "draining": "◌ DEĞERLENDİRME HESAPLANIYOR…",
+    "complete": "✓ DEĞERLENDİRME TAMAMLANDI"
+  },
+  "alertFeedSection": {
+    "live": "CANLI ALARM AKIŞI",
+    "finalizing": "ALARM AKIŞI · SONLANDIRMA",
+    "countSuffix": "alarm · açıklama için satıra tıklayın"
+  },
+  "footer": {
+    "tag": "AEGIS IDS // CIC-IDS2017 WEDNESDAY // ML TOPLULUĞU + COMMUNITY KURALLARI"
+  },
+  "roi": {
+    "titleIdle": "İŞ ETKİSİ ANALİZİ",
+    "titleLive": "İŞ ETKİSİ — CANLI",
+    "titleComplete": "İŞ ETKİSİ ANALİZİ",
+    "pcapProgress": "PCAP {pct}%",
+    "analystTimeRecovered": "Kazanılan Analist Süresi",
+    "hoursSuffix": "saat",
+    "equivalentDays": "~{days} iş gününe eşdeğer (3 dk/alarm, 8 sa/gün varsayımı)",
+    "falseAlarmComparison": "YANLIŞ ALARM KARŞILAŞTIRMASI",
+    "mlEnsemble": "ML Topluluğu",
+    "community": "Community",
+    "fewerFalseAlarms": "−{count} daha az yanlış alarm (%{pct} azalma)",
+    "xgbAccuracy": "XGB DOĞRULUK",
+    "xgbRecall": "XGB DUYARLILIK",
+    "tlSavings": "≈ ₺{amount}/yıl analist maliyeti tasarrufu",
+    "tlRate": "₺280/saat SOC analist oranı baz alınarak"
+  },
+  "evaluation": {
+    "title": "PERFORMANS METRİKLERİ — WEDNESDAY CIC-IDS2017",
+    "mlEnsemble": "ML TOPLULUĞU",
+    "snortCommunity": "SNORT3 COMMUNITY",
+    "metric": "METRİK",
+    "mlEns": "ML TOP",
+    "comm": "COMM",
+    "accuracy": "Doğruluk",
+    "precision": "Kesinlik",
+    "recall": "Duyarlılık",
+    "f1": "F1-Skoru",
+    "fpr": "FPR",
+    "tie": "EŞİT",
+    "win": "ÖNDE",
+    "awaiting": "ANALİZ BEKLENİYOR...",
+    "flowsEvaluated": "{count} AKIŞ DEĞERLENDİRİLDİ · GERÇEK ETİKETLER"
+  },
+  "alerts": {
+    "filterAll": "TÜMÜ",
+    "filterXgboost": "ML TOPLULUĞU",
+    "filterCommunity": "COMMUNITY",
+    "top": "↑ EN ÜST",
+    "clear": "TEMİZLE",
+    "col": {
+      "time": "ZAMAN",
+      "severity": "ŞİDDET",
+      "gt": "GE",
+      "source": "KAYNAK",
+      "destination": "HEDEF",
+      "proto": "PROTO",
+      "score": "SKOR",
+      "typeMessage": "TÜR · MESAJ"
+    },
+    "awaiting": "ALARMLAR BEKLENİYOR…",
+    "noMatch": "FİLTREYE UYGUN ALARM YOK",
+    "drainingNote": "◌ DEĞERLENDİRME SÜRÜYOR — {count} ALARM YAKALANDI",
+    "sev": {
+      "critical": "KRİTİK",
+      "high": "YÜKSEK",
+      "medium": "ORTA",
+      "low": "DÜŞÜK"
+    },
+    "gt": {
+      "realAttack": "GERÇEK SALDIRI",
+      "falseAlarm": "YANLIŞ ALARM"
+    },
+    "anomaly": {
+      "anomaly": "ANOMALİ",
+      "known": "BİLİNEN"
+    },
+    "dialog": {
+      "title": "ALARM DETAYI",
+      "time": "ZAMAN",
+      "source": "KAYNAK",
+      "destination": "HEDEF",
+      "protocol": "PROTOKOL",
+      "gidSid": "GID:SID",
+      "message": "MESAJ",
+      "score": "SKOR",
+      "band": "BAND",
+      "groundTruth": "GERÇEK ETİKET",
+      "realAttack": "GERÇEK SALDIRI",
+      "falseAlarm": "YANLIŞ ALARM",
+      "ifAnomaly": "IF ANOMALİ",
+      "mitre": "MITRE ATT&CK",
+      "rawJson": "HAM JSON ▸",
+      "aiAnalysis": "YZ ANALİZİ",
+      "computing": "HESAPLANIYOR…",
+      "reExplain": "YENİDEN AÇIKLA (SHAP)",
+      "explain": "AÇIKLA (SHAP)",
+      "topFeatures": "ilk 5 özellik",
+      "shapTitle": "ÖZELLİK KATKILARI (SHAP)",
+      "shapTowardAttack": "■ saldırıya yöneltir",
+      "shapTowardBenign": "■ iyi huyluya yöneltir"
+    },
+    "band": {
+      "communityRule": "Community kural eşleşmesi",
+      "noScore": "XGBoost (skor yok)",
+      "critical": "Kritik (skor ≥ 0.95)",
+      "high": "Yüksek (skor ≥ 0.85)",
+      "medium": "Orta (skor ≥ 0.70)",
+      "low": "Düşük"
+    }
+  },
+  "chart": {
+    "title": "TESPİT ZAMAN ÇİZELGESİ",
+    "mlEnsemble": "ML TOPLULUĞU",
+    "community": "COMMUNITY",
+    "complete": "TAMAMLANDI",
+    "detectedTypes": "TESPİT EDİLEN SALDIRI TÜRLERİ:",
+    "awaiting": "TRAFİK VERİSİ BEKLENİYOR",
+    "alertsPerSec": "alarm/s",
+    "analysisComplete": "ANALİZ TAMAMLANDI",
+    "peak": "ZİRVE",
+    "engineLabels": {
+      "DoS": "DoS",
+      "Scan": "Tarama",
+      "DDoS": "DDoS",
+      "Bot": "Bot",
+      "BruteF": "Kaba",
+      "Comm": "Komün"
+    },
+    "tooltipMl": "ML TOPLULUĞU",
+    "tooltipComm": "COMMUNITY",
+    "tooltipTotal": "TOPLAM"
+  },
+  "mitre": {
+    "buttonLabel": "MITRE",
+    "title": "MITRE ATT&CK HARİTASI",
+    "subtitle": "Tespit edilen teknikler — canlı alert sayımı",
+    "noAlerts": "Alarm bekleniyor… analizi başlatın",
+    "alertsSuffix": "alarm",
+    "tactics": {
+      "discovery": "KEŞIF",
+      "credential": "KİMLİK ERİŞİMİ",
+      "c2": "KOMUTA & KONTROL",
+      "impact": "ETKİ"
+    },
+    "footerNote": "MITRE ATT&CK® framework — gerçek eşleşmeler"
+  },
+  "coverage": {
+    "buttonLabel": "KAPSAM",
+    "title": "TESPİT KAPSAMI",
+    "modelsActive": "{n}/{total} MODEL AKTİF",
+    "recall": "DUYARLILIK",
+    "precision": "KESİNLİK",
+    "dataset": "VERİ SETİ",
+    "footerEvaluated": "DEĞERLENDİRİLMİŞ · CIC-IDS2017 · SABİTLENMİŞ METRİKLER",
+    "footerCriteriaMet": "TÜM KRİTERLER KARŞILANDI ✓",
+    "models": {
+      "dos": "DoS Dedektörü",
+      "portscan": "Port Tarama",
+      "ddos": "DDoS Toplayıcı",
+      "bot": "Botnet İstemci",
+      "bruteforce": "Kaba Kuvvet"
+    },
+    "attacks": {
+      "dos": "DoS / Slowloris / Hulk",
+      "portscan": "TCP SYN Port Tarama",
+      "ddos": "Dağıtık SYN / HTTP Sel",
+      "bot": "Botnet C2 Sinyalleşmesi",
+      "bruteforce": "SSH / FTP Kaba Kuvvet"
+    }
+  },
+  "narration": {
+    "dos": "{src}, {dst} adresine SYN flood başlattı",
+    "portscan": "{src}, {dst} üzerinde port taraması yapıyor",
+    "bot": "{src} botnet C2 sinyali gönderiyor → {dst}",
+    "bruteforce": "{src}, {dst} adresine SSH kaba kuvvet uyguluyor",
+    "dos_agg": "DDoS koordinasyonu tespit edildi — kaynak: {src}",
+    "community": "Snort3 imza eşleşmesi: {src} → {dst}",
+    "detected": "Aegis {elapsed}s içinde tespit etti",
+    "score": "Skor"
+  },
+  "arcx": {
+    "buttonLabel": "ENTEGRASYON",
+    "title": "ARCX PLATFORM ENTEGRASYONu",
+    "subtitle": "Aegis, mevcut ARCX modüllerine dördüncü katman olarak eklenir",
+    "platformLabel": "ARCX AIOps Dashboard",
+    "existingModules": "MEVCUT MODÜLLER",
+    "newModule": "YENİ — AEGİS",
+    "mod1Title": "Sunucu Performansı",
+    "mod1Desc": "CPU · Bellek · Disk · Süreç izleme",
+    "mod2Title": "Ağ Kesintisi",
+    "mod2Desc": "Gecikme · Paket kaybı · SLA ihlali",
+    "mod3Title": "SLA Uyarısı",
+    "mod3Desc": "Uptime · Yanıt süresi · Eşik aşımı",
+    "mod4Title": "Güvenlik Tehdidi",
+    "mod4Desc": "DoS · Port Tarama · Botnet · DDoS · Kaba Kuvvet",
+    "mod4Badge": "AEGİS IDS",
+    "liveAlerts": "CANLI AEGİS ALARMLARI → ARCX",
+    "noAlerts": "Alarm bekleniyor… analizi başlatın",
+    "flowLabel": "AEGİS → ARCX",
+    "footerLeft": "REST API · WebHook · Syslog entegrasyon desteği",
+    "footerRight": "OEM / White-label hazır"
+  },
+  "toast": {
+    "started": "Wednesday yeniden oynatma başlatıldı",
+    "stopped": "Yeniden oynatma durduruldu",
+    "startFail": "Başlatma başarısız: {err}",
+    "stopFail": "Durdurma başarısız: {err}"
+  },
+  "language": {
+    "label": "DİL",
+    "tr": "TR",
+    "en": "EN"
+  }
+}

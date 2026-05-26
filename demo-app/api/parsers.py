@@ -9,6 +9,8 @@ from models import Alert, Engine, Proto
 
 logger = logging.getLogger("parsers")
 
+_alert_seq = 0
+
 # GID → Engine routing
 _GID_ENGINE: dict[int, Engine] = {
     301: Engine.xgboost,
@@ -111,15 +113,13 @@ def parse_alert_csv_line(line: str, engine: Engine | None = None) -> Optional[Al
     # Resolve engine: GID-based routing in combined mode
     resolved_engine = engine if engine is not None else _GID_ENGINE.get(gid, Engine.community)
 
-    # Timestamp: Snort uses 'MM/DD-HH:MM:SS.ffffff' without year — use current year
-    ts_raw = parts[_F_TS].strip()
-    try:
-        now = datetime.now(timezone.utc)
-        ts = datetime.strptime(f"{now.year}/{ts_raw}", "%Y/%m/%d-%H:%M:%S.%f")
-        ts = ts.replace(tzinfo=timezone.utc)
-        ts_iso = ts.isoformat()
-    except ValueError:
-        ts_iso = datetime.now(timezone.utc).isoformat()
+    # Timestamp: current time with monotonically increasing microsecond offset
+    # so alerts parsed in the same second get unique, ordered timestamps
+    global _alert_seq
+    now = datetime.now(timezone.utc)
+    ts = now.replace(microsecond=(now.microsecond + _alert_seq) % 1000000)
+    _alert_seq += 1
+    ts_iso = ts.isoformat()
 
     msg = _GID_MSG.get(gid, f"Community rule {gid}:{sid}")
 

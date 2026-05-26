@@ -61,14 +61,28 @@ export type EngineEvaluation = {
 
 export type EvaluationResult = {
   xgboost: EngineEvaluation;
+  portscan: EngineEvaluation | null;
+  dos_agg: EngineEvaluation | null;
+  bot: EngineEvaluation | null;
+  bruteforce: EngineEvaluation | null;
+  ddos: EngineEvaluation | null;
   community: EngineEvaluation;
   total_flows: number;
+};
+
+export type ReplayPhase = "idle" | "running" | "draining" | "complete";
+
+export type WsStatusData = {
+  snort_running: boolean;
+  pcap_progress: number;
+  phase?: ReplayPhase;
+  error?: string | null;
 };
 
 export type WsMessage =
   | { type: "alert"; engine: Engine; data: Alert }
   | { type: "metric"; engine: Engine; data: Metrics }
-  | { type: "status"; data: { snort_running: boolean; pcap_progress: number; error?: string | null } }
+  | { type: "status"; data: WsStatusData }
   | { type: "comparison"; data: ComparisonSnapshot }
   | { type: "alert_counts"; data: AlertCounts }
   | { type: "evaluation"; data: EvaluationResult };

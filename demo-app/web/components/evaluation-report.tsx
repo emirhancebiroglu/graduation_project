@@ -1,12 +1,30 @@
 "use client";
 import { useState } from "react";
-import type { EvaluationResult } from "@/lib/types";
+import type { EngineEvaluation, EvaluationResult } from "@/lib/types";
+import { useT } from "@/lib/i18n";
 
 type Props = { evaluation: EvaluationResult | null };
 
 function fmtN(n: number): string {
   return n.toLocaleString("en-US");
 }
+
+type EngineDef = {
+  key: keyof Omit<EvaluationResult, "total_flows">;
+  label: string;
+  mode: "flow" | "ip";
+  color: string;
+};
+
+const ENGINES: EngineDef[] = [
+  { key: "xgboost", label: "DoS (Per-Flow)", mode: "flow", color: "#ff3b3b" },
+  { key: "portscan", label: "PortScan", mode: "ip", color: "#a855f7" },
+  { key: "dos_agg", label: "DoS Aggregator", mode: "ip", color: "#f59e0b" },
+  { key: "bot", label: "Bot Client", mode: "ip", color: "#06b6d4" },
+  { key: "bruteforce", label: "BruteForce", mode: "ip", color: "#ec4899" },
+  { key: "ddos", label: "DDoS", mode: "ip", color: "#ef4444" },
+  { key: "community", label: "Community", mode: "flow", color: "#00d4ff" },
+];
 
 type CellProps = {
   label: string;
@@ -34,12 +52,29 @@ function MatrixCell({ label, value, variant, size = "sm" }: CellProps) {
   );
 }
 
-function CommFPCell({ value }: { value: number }) {
+function EngineMatrix({ engine, data }: { engine: EngineDef; data: EngineEvaluation }) {
   return (
-    <div className="flex flex-col items-center justify-center p-2.5 relative"
-      style={{ border: "1px solid rgba(255,59,59,0.3)", background: "rgba(255,59,59,0.07)", minWidth: "72px" }}>
-      <span className="text-[9px] font-mono mb-1" style={{ color: "#ff3b3b" }}>FP</span>
-      <span className="text-xs font-mono font-semibold tabular-nums" style={{ color: "#ff3b3b" }}>{fmtN(value)}</span>
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <div className="w-1.5 h-1.5" style={{ background: engine.color, boxShadow: `0 0 6px ${engine.color}` }} />
+        <span className="section-label text-[9px]" style={{ color: engine.color }}>{engine.label}</span>
+        {engine.mode === "ip" && (
+          <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(168,85,247,0.3)", background: "rgba(168,85,247,0.08)", color: "#a855f7" }}>IP-Level</span>
+        )}
+      </div>
+      <div className="grid grid-cols-4 gap-1">
+        <MatrixCell label="TP" value={data.TP} variant="tp" />
+        <MatrixCell label="FP" value={data.FP} variant="fp" />
+        <MatrixCell label="FN" value={data.FN} variant="fn" />
+        <MatrixCell label="TN" value={data.TN} variant="tn" />
+      </div>
+      <div className="flex items-center gap-3 text-[9px] font-mono" style={{ color: "rgba(148,163,184,0.6)" }}>
+        <span>Acc {(data.accuracy * 100).toFixed(2)}%</span>
+        <span>Prec {(data.precision * 100).toFixed(2)}%</span>
+        <span>Rec {(data.recall * 100).toFixed(2)}%</span>
+        <span>F1 {(data.f1 * 100).toFixed(2)}%</span>
+        <span>FPR {(data.fpr * 100).toFixed(2)}%</span>
+      </div>
     </div>
   );
 }
@@ -53,6 +88,7 @@ type MetricBarProps = {
 };
 
 function MetricBar({ label, xgbValue, commValue, xgbWins, invertWin }: MetricBarProps) {
+  const { t } = useT();
   const isTie = xgbValue.toFixed(4) === commValue.toFixed(4);
 
   const xgbActuallyWins = !isTie && xgbWins;
@@ -60,9 +96,6 @@ function MetricBar({ label, xgbValue, commValue, xgbWins, invertWin }: MetricBar
 
   const xgbBarColor = isTie ? "#64748b" : invertWin ? (xgbWins ? "#10b981" : "#ff3b3b") : (xgbWins ? "#10b981" : "#ff3b3b");
   const commBarColor = isTie ? "#64748b" : invertWin ? (!xgbWins ? "#10b981" : "#ff3b3b") : (!xgbWins ? "#10b981" : "#ff3b3b");
-
-  const xgbLabel = label === "FPR" ? label : label;
-  const commLabel = label === "FPR" ? label : label;
 
   return (
     <div className="flex items-center gap-4 py-2 border-b last:border-0" style={{ borderColor: "rgba(0,212,255,0.05)" }}>
@@ -72,9 +105,9 @@ function MetricBar({ label, xgbValue, commValue, xgbWins, invertWin }: MetricBar
         <div className="flex items-center gap-1.5 mb-1">
           <span className="text-[10px] font-mono font-semibold tabular-nums" style={{ color: "#ff3b3b" }}>{xgbValue.toFixed(2)}%</span>
           {isTie ? (
-            <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.1)", color: "#94a3b8" }}>TIE</span>
+            <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.1)", color: "#94a3b8" }}>{t("evaluation.tie")}</span>
           ) : xgbActuallyWins ? (
-            <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(16,185,129,0.3)", background: "rgba(16,185,129,0.08)", color: "#10b981" }}>WIN</span>
+            <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(16,185,129,0.3)", background: "rgba(16,185,129,0.08)", color: "#10b981" }}>{t("evaluation.win")}</span>
           ) : null}
         </div>
         <div className="h-px w-full" style={{ background: "rgba(0,212,255,0.06)" }}>
@@ -86,7 +119,7 @@ function MetricBar({ label, xgbValue, commValue, xgbWins, invertWin }: MetricBar
         <div className="flex items-center gap-1.5 mb-1">
           <span className="text-[10px] font-mono font-semibold tabular-nums" style={{ color: "#00d4ff" }}>{commValue.toFixed(2)}%</span>
           {isTie ? null : commActuallyWins ? (
-            <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.1)", color: "#94a3b8" }}>WIN</span>
+            <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.1)", color: "#94a3b8" }}>{t("evaluation.win")}</span>
           ) : null}
         </div>
         <div className="h-px w-full" style={{ background: "rgba(0,212,255,0.06)" }}>
@@ -98,7 +131,8 @@ function MetricBar({ label, xgbValue, commValue, xgbWins, invertWin }: MetricBar
 }
 
 export function EvaluationReport({ evaluation }: Props) {
-  const [open, setOpen] = useState(true);
+  const { t } = useT();
+  const [open, setOpen] = useState(false);
 
   if (!evaluation) {
     return (
@@ -113,19 +147,24 @@ export function EvaluationReport({ evaluation }: Props) {
         <div className="absolute top-0 left-0 w-3 h-3 border-t border-l z-10" style={{ borderColor: "rgba(0,212,255,0.3)" }} />
         <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r z-10" style={{ borderColor: "rgba(0,212,255,0.3)" }} />
 
-        <div className="flex items-center gap-3 px-5 py-2.5 border-b" style={{ borderColor: "rgba(0,212,255,0.06)" }}>
-          <div className="w-1 h-3.5 skel" style={{ background: "rgba(0,212,255,0.6)" }} />
-          <div>
-            <span className="section-label text-[10px]" style={{ color: "#00d4ff" }}>PERFORMANCE METRICS — WEDNESDAY CIC-IDS2017</span>
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="w-full flex items-center justify-between px-5 py-2.5 border-b text-left"
+          style={{ borderColor: "rgba(0,212,255,0.06)" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-1 h-3.5 skel" style={{ background: "rgba(0,212,255,0.6)" }} />
+            <span className="section-label text-[10px]" style={{ color: "#00d4ff" }}>{t("evaluation.title")}</span>
           </div>
-        </div>
+          <span className="section-label transition-transform" style={{ color: "rgba(0,212,255,0.4)", transform: open ? "rotate(90deg)" : "none", display: "inline-block" }}>▸</span>
+        </button>
 
-        <div className="p-4 space-y-4">
+        {open && <div className="p-4 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 skel" style={{ background: "#ff3b3b", borderRadius: "50%" }} />
-                <span className="section-label text-[9px]" style={{ color: "#ff3b3b" }}>ML ENSEMBLE</span>
+                <span className="section-label text-[9px]" style={{ color: "#ff3b3b" }}>{t("evaluation.mlEnsemble")}</span>
               </div>
               <div className="grid grid-cols-2 gap-1">
                 {["TP","FP","FN","TN"].map(v => (
@@ -140,7 +179,7 @@ export function EvaluationReport({ evaluation }: Props) {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 skel" style={{ background: "#00d4ff", borderRadius: "50%" }} />
-                <span className="section-label text-[9px]" style={{ color: "#00d4ff" }}>SNORT3 COMMUNITY</span>
+                <span className="section-label text-[9px]" style={{ color: "#00d4ff" }}>{t("evaluation.snortCommunity")}</span>
               </div>
               <div className="grid grid-cols-2 gap-1">
                 {["TP","FP","FN","TN"].map(v => (
@@ -156,12 +195,18 @@ export function EvaluationReport({ evaluation }: Props) {
 
           <div className="border-t pt-3 space-y-0" style={{ borderColor: "rgba(0,212,255,0.06)" }}>
             <div className="flex items-center gap-3 pb-1.5 border-b" style={{ borderColor: "rgba(0,212,255,0.05)" }}>
-              <span className="section-label w-16 shrink-0 text-[9px] skel" style={{ color: "rgba(148,163,184,0.5)" }}>METRIC</span>
-              <span className="flex-1 section-label text-[9px] skel" style={{ color: "rgba(255,59,59,0.3)" }}>ML ENS</span>
-              <span className="flex-1 section-label text-[9px] skel" style={{ color: "rgba(0,212,255,0.3)" }}>COMM</span>
+              <span className="section-label w-16 shrink-0 text-[9px] skel" style={{ color: "rgba(148,163,184,0.5)" }}>{t("evaluation.metric")}</span>
+              <span className="flex-1 section-label text-[9px] skel" style={{ color: "rgba(255,59,59,0.65)" }}>{t("evaluation.mlEns")}</span>
+              <span className="flex-1 section-label text-[9px] skel" style={{ color: "rgba(0,212,255,0.65)" }}>{t("evaluation.comm")}</span>
             </div>
-            {["Accuracy","Precision","Recall","F1-Score","FPR"].map(label => (
-              <div key={label} className="flex items-center gap-4 py-2 border-b last:border-0 skel"
+            {[
+              { k: "accuracy", label: t("evaluation.accuracy") },
+              { k: "precision", label: t("evaluation.precision") },
+              { k: "recall", label: t("evaluation.recall") },
+              { k: "f1", label: t("evaluation.f1") },
+              { k: "fpr", label: t("evaluation.fpr") },
+            ].map(({ k, label }) => (
+              <div key={k} className="flex items-center gap-4 py-2 border-b last:border-0 skel"
                 style={{ borderColor: "rgba(0,212,255,0.04)" }}>
                 <span className="section-label w-16 shrink-0 text-[9px]" style={{ color: "rgba(148,163,184,0.5)" }}>{label}</span>
                 <div className="flex-1 h-px skel" style={{ background: "rgba(0,212,255,0.1)" }} />
@@ -170,16 +215,22 @@ export function EvaluationReport({ evaluation }: Props) {
             ))}
           </div>
 
-          <p className="section-label text-[9px] pt-2 border-t skel" style={{ color: "rgba(148,163,184,0.4)", borderColor: "rgba(0,212,255,0.04)" }}>
-            AWAITING ANALYSIS...
+          <p className="section-label text-[9px] pt-2 border-t skel" style={{ color: "rgba(148,163,184,0.7)", borderColor: "rgba(0,212,255,0.04)" }}>
+            {t("evaluation.awaiting")}
           </p>
-        </div>
+        </div>}
       </div>
     );
   }
 
   const xgb = evaluation.xgboost;
   const comm = evaluation.community;
+
+  const otherEngines = ENGINES.filter((e) => e.key !== "xgboost" && e.key !== "community");
+  const activeOtherEngines = otherEngines.filter((e) => {
+    const val = evaluation[e.key];
+    return val !== null && val !== undefined;
+  });
 
   return (
     <div className="relative overflow-hidden" style={{ border: "1px solid rgba(0,212,255,0.1)", background: "#0f1318", animation: "fadeIn 0.6s ease-in" }}>
@@ -196,7 +247,12 @@ export function EvaluationReport({ evaluation }: Props) {
         <div className="flex items-center gap-3">
           <div className="w-1 h-3.5" style={{ background: "rgba(0,212,255,0.6)", boxShadow: "0 0 6px rgba(0,212,255,0.6)" }} />
           <div>
-            <span className="section-label text-[10px]" style={{ color: "#00d4ff" }}>PERFORMANCE METRICS — WEDNESDAY CIC-IDS2017</span>
+            <span className="section-label text-[10px]" style={{ color: "#00d4ff" }}>{t("evaluation.title")}</span>
+            {activeOtherEngines.length > 0 && (
+              <span className="ml-2 text-[8px] font-mono px-1.5 py-0.5" style={{ border: "1px solid rgba(16,185,129,0.3)", background: "rgba(16,185,129,0.08)", color: "#10b981" }}>
+                +{activeOtherEngines.length} engine{activeOtherEngines.length > 1 ? "s" : ""}
+              </span>
+            )}
           </div>
         </div>
         <span className="section-label transition-transform" style={{ color: "rgba(0,212,255,0.4)", transform: open ? "rotate(90deg)" : "none", display: "inline-block" }}>▸</span>
@@ -204,11 +260,12 @@ export function EvaluationReport({ evaluation }: Props) {
 
       {open && (
         <div className="p-4 space-y-4">
+          {/* Primary: XGBoost vs Community */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5" style={{ background: "#ff3b3b", boxShadow: "0 0 6px #ff3b3b" }} />
-                <span className="section-label text-[9px]" style={{ color: "#ff3b3b" }}>ML ENSEMBLE</span>
+                <span className="section-label text-[9px]" style={{ color: "#ff3b3b" }}>{t("evaluation.mlEnsemble")}</span>
               </div>
               <div className="grid grid-cols-2 gap-1">
                 <MatrixCell label="TP" value={xgb.TP} variant="tp" />
@@ -221,11 +278,11 @@ export function EvaluationReport({ evaluation }: Props) {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5" style={{ background: "#00d4ff", boxShadow: "0 0 6px #00d4ff" }} />
-                <span className="section-label text-[9px]" style={{ color: "#00d4ff" }}>SNORT3 COMMUNITY</span>
+                <span className="section-label text-[9px]" style={{ color: "#00d4ff" }}>{t("evaluation.snortCommunity")}</span>
               </div>
               <div className="grid grid-cols-2 gap-1">
                 <MatrixCell label="TP" value={comm.TP} variant="tp" />
-                <CommFPCell value={comm.FP} />
+                <MatrixCell label="FP" value={comm.FP} variant="fp" />
                 <MatrixCell label="FN" value={comm.FN} variant="fn" />
                 <MatrixCell label="TN" value={comm.TN} variant="tn" />
               </div>
@@ -234,19 +291,36 @@ export function EvaluationReport({ evaluation }: Props) {
 
           <div className="border-t pt-3 space-y-0" style={{ borderColor: "rgba(0,212,255,0.06)" }}>
             <div className="flex items-center gap-3 pb-1.5 border-b" style={{ borderColor: "rgba(0,212,255,0.05)" }}>
-              <span className="section-label w-16 shrink-0 text-[9px]" style={{ color: "rgba(148,163,184,0.75)" }}>METRIC</span>
-              <span className="flex-1 section-label text-[9px]" style={{ color: "rgba(255,59,59,0.5)" }}>ML ENS</span>
-              <span className="flex-1 section-label text-[9px]" style={{ color: "rgba(0,212,255,0.5)" }}>COMM</span>
+              <span className="section-label w-16 shrink-0 text-[9px]" style={{ color: "rgba(148,163,184,0.9)" }}>{t("evaluation.metric")}</span>
+              <span className="flex-1 section-label text-[9px]" style={{ color: "rgba(255,59,59,0.85)" }}>{t("evaluation.mlEns")}</span>
+              <span className="flex-1 section-label text-[9px]" style={{ color: "rgba(0,212,255,0.85)" }}>{t("evaluation.comm")}</span>
             </div>
-            <MetricBar label="Accuracy" xgbValue={xgb.accuracy * 100} commValue={comm.accuracy * 100} xgbWins={xgb.accuracy >= comm.accuracy} />
-            <MetricBar label="Precision" xgbValue={xgb.precision * 100} commValue={comm.precision * 100} xgbWins={xgb.precision >= comm.precision} />
-            <MetricBar label="Recall" xgbValue={xgb.recall * 100} commValue={comm.recall * 100} xgbWins={xgb.recall >= comm.recall} />
-            <MetricBar label="F1-Score" xgbValue={xgb.f1 * 100} commValue={comm.f1 * 100} xgbWins={xgb.f1 >= comm.f1} />
-            <MetricBar label="FPR" xgbValue={xgb.fpr * 100} commValue={comm.fpr * 100} xgbWins={xgb.fpr <= comm.fpr} invertWin />
+            <MetricBar label={t("evaluation.accuracy")} xgbValue={xgb.accuracy * 100} commValue={comm.accuracy * 100} xgbWins={xgb.accuracy >= comm.accuracy} />
+            <MetricBar label={t("evaluation.precision")} xgbValue={xgb.precision * 100} commValue={comm.precision * 100} xgbWins={xgb.precision >= comm.precision} />
+            <MetricBar label={t("evaluation.recall")} xgbValue={xgb.recall * 100} commValue={comm.recall * 100} xgbWins={xgb.recall >= comm.recall} />
+            <MetricBar label={t("evaluation.f1")} xgbValue={xgb.f1 * 100} commValue={comm.f1 * 100} xgbWins={xgb.f1 >= comm.f1} />
+            <MetricBar label={t("evaluation.fpr")} xgbValue={xgb.fpr * 100} commValue={comm.fpr * 100} xgbWins={xgb.fpr <= comm.fpr} invertWin />
           </div>
 
+          {/* Secondary: Other engines */}
+          {activeOtherEngines.length > 0 && (
+            <div className="border-t pt-3 space-y-3" style={{ borderColor: "rgba(0,212,255,0.06)" }}>
+              <div className="flex items-center gap-2">
+                <div className="w-1 h-3" style={{ background: "rgba(168,85,247,0.6)", boxShadow: "0 0 6px rgba(168,85,247,0.4)" }} />
+                <span className="section-label text-[10px]" style={{ color: "#a855f7" }}>ML INSPECTORS</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {activeOtherEngines.map((eng) => {
+                  const data = evaluation[eng.key];
+                  if (!data) return null;
+                  return <EngineMatrix key={eng.key} engine={eng} data={data} />;
+                })}
+              </div>
+            </div>
+          )}
+
           <p className="section-label text-[9px] pt-2 border-t" style={{ color: "rgba(148,163,184,0.5)", borderColor: "rgba(0,212,255,0.05)" }}>
-            {evaluation.total_flows.toLocaleString("en-US")} FLOWS EVALUATED · GROUND TRUTH LABELS
+            {t("evaluation.flowsEvaluated", { count: evaluation.total_flows.toLocaleString("en-US") })}
           </p>
         </div>
       )}

@@ -1,13 +1,12 @@
 "use client";
 import { useEffect, useRef, useState, useCallback } from "react";
-import type { WsMessage, Alert, EvaluationResult, CoreEngine } from "./types";
+import type { WsMessage, Alert, EvaluationResult, Engine, CoreEngine, ReplayPhase } from "./types";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000/ws";
 const MAX_RECENT_ALERTS = 20;
 const MAX_FEED_ALERTS = 500;
 const FLUSH_INTERVAL_MS = 150; // batch setState at most ~6x/sec
 
-export type ReplayPhase = "idle" | "running" | "evaluating" | "complete";
 export type EngineMetrics = { total: number; alertsPerSec: number };
 
 export type IdsStreamState = {
@@ -20,7 +19,8 @@ export type IdsStreamState = {
   evaluation: EvaluationResult | null;
   recentAlerts: Alert[];
   alerts: Alert[];
-  engineAlerts: Record<CoreEngine, Alert[]>;
+  engineAlerts: Record<Engine, Alert[]>;
+  markStarted: () => void;
 };
 
 export function useIdsStream(): IdsStreamState {
@@ -33,23 +33,71 @@ export function useIdsStream(): IdsStreamState {
   const [pcapProgressVisible, setPcapProgressVisible] = useState(false);
   const [recentAlerts, setRecentAlerts] = useState<Alert[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [engineAlerts, setEngineAlerts] = useState<Record<CoreEngine, Alert[]>>({ xgboost: [], community: [] });
+  const [engineAlerts, setEngineAlerts] = useState<Record<Engine, Alert[]>>({
+    xgboost: [], community: [], portscan: [], dos_agg: [], bot: [], bruteforce: [],
+  });
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevRunning = useRef(false);
+  const replayPhaseRef = useRef<ReplayPhase>("idle");
   const recentAlertsRef = useRef<Alert[]>([]);
   const alertsRef = useRef<Alert[]>([]);
-  const engineAlertsRef = useRef<Record<CoreEngine, Alert[]>>({ xgboost: [], community: [] });
+  const engineAlertsRef = useRef<Record<Engine, Alert[]>>({
+    xgboost: [], community: [], portscan: [], dos_agg: [], bot: [], bruteforce: [],
+  });
   const pendingFlush = useRef(false);
+  // True only after user clicks start in this browser session
+  const sessionStartedRef = useRef(false);
 
-  const handleStatus = useCallback((running: boolean, progress: number, err: string | null | undefined) => {
+  const handleStatus = useCallback((running: boolean, progress: number, err: string | null | undefined, phase?: ReplayPhase) => {
+    // Ignore leftover backend state from before page load
+    if (!sessionStartedRef.current && (phase === "draining" || phase === "running" || running)) {
+      return;
+    }
+
     setSnortRunning(running);
     setPcapProgress(progress);
     setError(err ?? null);
 
+    if (phase === "draining") {
+      replayPhaseRef.current = "draining";
+      setReplayPhase("draining");
+      setPcapProgress(1.0);
+      prevRunning.current = running;
+      return;
+    }
+
+    if (phase === "complete" && replayPhaseRef.current !== "idle") {
+      replayPhaseRef.current = "complete";
+      setReplayPhase("complete");
+      setPcapProgressVisible(false);
+      setSnortRunning(false);
+      prevRunning.current = false;
+      return;
+    }
+
+    // Stop pressed mid-replay or mid-draining — reset to idle
+    if (!running && !phase && replayPhaseRef.current !== "idle" && replayPhaseRef.current !== "complete") {
+      replayPhaseRef.current = "idle";
+      setReplayPhase("idle");
+      setPcapProgress(0);
+      setPcapProgressVisible(false);
+      setSnortRunning(false);
+      setEvaluation(null);
+      alertsRef.current = [];
+      setAlerts([]);
+      engineAlertsRef.current = { xgboost: [], community: [], portscan: [], dos_agg: [], bot: [], bruteforce: [] };
+      setEngineAlerts({ xgboost: [], community: [], portscan: [], dos_agg: [], bot: [], bruteforce: [] });
+      recentAlertsRef.current = [];
+      setRecentAlerts([]);
+      prevRunning.current = false;
+      return;
+    }
+
     if (running && !prevRunning.current) {
+      replayPhaseRef.current = "running";
       setReplayPhase("running");
       setPcapProgressVisible(true);
       setEvaluation(null);
@@ -57,8 +105,8 @@ export function useIdsStream(): IdsStreamState {
       setRecentAlerts([]);
       alertsRef.current = [];
       setAlerts([]);
-      engineAlertsRef.current = { xgboost: [], community: [] };
-      setEngineAlerts({ xgboost: [], community: [] });
+      engineAlertsRef.current = { xgboost: [], community: [], portscan: [], dos_agg: [], bot: [], bruteforce: [] };
+      setEngineAlerts({ xgboost: [], community: [], portscan: [], dos_agg: [], bot: [], bruteforce: [] });
     } else if (!running && prevRunning.current) {
       setPcapProgressVisible(false);
     }
@@ -98,23 +146,27 @@ export function useIdsStream(): IdsStreamState {
             handleStatus(
               msg.data.snort_running,
               msg.data.pcap_progress ?? 0,
-              msg.data.error
+              msg.data.error,
+              msg.data.phase
             );
           } else if (msg.type === "evaluation") {
             handleEvaluation(msg.data);
           } else if (msg.type === "alert") {
             const alert = msg.data as Alert;
-            // Map all ML engines → "xgboost" bucket for filter; community stays community
-            const bucket: "xgboost" | "community" =
-              alert.engine === "community" ? "community" : "xgboost";
+            // Don't append if in draining/complete phase — feed is frozen
+            if (replayPhaseRef.current === "draining" || replayPhaseRef.current === "complete") {
+              // Still process for backend enrichment but don't update feed
+              return;
+            }
+            // Use the actual engine as bucket key
+            const bucket: Engine = alert.engine;
 
-            // Mutate refs only — no setState here
             alertsRef.current = [alert, ...alertsRef.current].slice(0, MAX_FEED_ALERTS);
             engineAlertsRef.current = {
               ...engineAlertsRef.current,
               [bucket]: [alert, ...engineAlertsRef.current[bucket]].slice(0, MAX_FEED_ALERTS),
             };
-            if (bucket === "xgboost") {
+            if (bucket !== "community") {
               recentAlertsRef.current = [alert, ...recentAlertsRef.current].slice(0, MAX_RECENT_ALERTS);
             }
 
@@ -154,6 +206,8 @@ export function useIdsStream(): IdsStreamState {
     };
   }, [connect]);
 
+  const markStarted = useCallback(() => { sessionStartedRef.current = true; }, []);
+
   return {
     connected,
     snortRunning,
@@ -165,5 +219,6 @@ export function useIdsStream(): IdsStreamState {
     recentAlerts,
     alerts,
     engineAlerts,
+    markStarted,
   };
 }

@@ -3,6 +3,7 @@ import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
+import { I18nProvider } from "@/lib/i18n";
 
 const ibmPlexSans = IBM_Plex_Sans({
   variable: "--font-ibm-plex-sans",
@@ -17,7 +18,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CyberSense IDS — Demo",
+  title: "Aegis IDS — Demo",
   description: "Real-time intrusion detection dashboard — ML Ensemble + Community Rules",
 };
 
@@ -28,14 +29,16 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="tr"
       className={`dark ${ibmPlexSans.variable} ${ibmPlexMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <TooltipProvider>
-          {children}
-        </TooltipProvider>
-        <Toaster position="bottom-right" richColors />
+        <I18nProvider>
+          <TooltipProvider>
+            {children}
+          </TooltipProvider>
+          <Toaster position="bottom-right" richColors />
+        </I18nProvider>
       </body>
     </html>
   );

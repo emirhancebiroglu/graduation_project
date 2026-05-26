@@ -7,13 +7,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { Alert, Engine, CoreEngine, ShapContribution } from "@/lib/types";
+import type { Alert, Engine, CoreEngine, ShapContribution, ReplayPhase } from "@/lib/types";
+import { useT } from "@/lib/i18n";
 
 type Filter = "all" | "xgboost" | "community";
 
 type Props = {
   alerts: Alert[];
   engineAlerts: Record<CoreEngine, Alert[]>;
+  replayPhase: ReplayPhase;
   onClear: () => void;
 };
 
@@ -37,15 +39,22 @@ const _SEVERITY_STYLE: Record<Severity, { color: string; border: string; bg: str
 };
 
 function SeverityChip({ alert }: { alert: Alert }): React.ReactElement {
+  const { t } = useT();
+  if (alert.engine === "community") {
+    return (
+      <span className="text-[10px] font-mono tabular-nums" style={{ color: "rgba(148,163,184,0.4)" }}>—</span>
+    );
+  }
   const sev = getSeverity(alert);
   const st = _SEVERITY_STYLE[sev];
+  const sevLabel = t(`alerts.sev.${sev.toLowerCase()}`);
   return (
     <span
       className="inline-flex items-center gap-1 text-[8px] font-mono px-1.5 py-0.5 font-bold"
       style={{ border: `1px solid ${st.border}`, background: st.bg, color: st.color, letterSpacing: "0.06em" }}
     >
       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: st.dot, boxShadow: `0 0 4px ${st.dot}` }} />
-      {sev}
+      {sevLabel}
     </span>
   );
 }
@@ -116,19 +125,20 @@ function scoreBand(alert: Alert): string {
   return "Low";
 }
 
-function gtBadge(gt: string | null | undefined): React.ReactNode {
+function GtBadge({ gt }: { gt: string | null | undefined }): React.ReactNode {
+  const { t } = useT();
   if (!gt) return null;
   if (gt === "attack") {
     return (
       <span className="text-[8px] font-mono px-1 py-0.5 font-bold" style={{ border: "1px solid rgba(16,185,129,0.4)", background: "rgba(16,185,129,0.12)", color: "#10b981", letterSpacing: "0.05em" }}>
-        REAL ATTACK
+        {t("alerts.gt.realAttack")}
       </span>
     );
   }
   if (gt === "benign") {
     return (
       <span className="text-[8px] font-mono px-1 py-0.5 font-bold" style={{ border: "1px solid rgba(255,59,59,0.35)", background: "rgba(255,59,59,0.1)", color: "#ff3b3b", letterSpacing: "0.05em" }}>
-        FALSE ALARM
+        {t("alerts.gt.falseAlarm")}
       </span>
     );
   }
@@ -163,29 +173,31 @@ function mitreBadge(technique: string | null | undefined): React.ReactNode {
   );
 }
 
-function ifBadge(ifLabel: string | null | undefined): React.ReactNode {
+function IfBadge({ ifLabel }: { ifLabel: string | null | undefined }): React.ReactNode {
+  const { t } = useT();
   if (!ifLabel) return null;
   if (ifLabel === "anomaly_candidate") {
     return (
       <span className="text-[8px] font-mono px-1 py-0.5 font-bold" style={{ border: "1px solid rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.1)", color: "#fbbf24", letterSpacing: "0.05em" }}>
-        ANOMALY
+        {t("alerts.anomaly.anomaly")}
       </span>
     );
   }
   return (
     <span className="text-[8px] font-mono px-1 py-0.5 font-bold" style={{ border: "1px solid rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.1)", color: "rgba(148,163,184,0.85)", letterSpacing: "0.05em" }}>
-      KNOWN
+      {t("alerts.anomaly.known")}
     </span>
   );
 }
 
-const FILTERS: { label: string; value: Filter }[] = [
-  { label: "ALL", value: "all" },
-  { label: "ML ENSEMBLE", value: "xgboost" },
-  { label: "COMMUNITY", value: "community" },
+const FILTER_KEYS: { key: "filterAll" | "filterXgboost" | "filterCommunity"; value: Filter }[] = [
+  { key: "filterAll", value: "all" },
+  { key: "filterXgboost", value: "xgboost" },
+  { key: "filterCommunity", value: "community" },
 ];
 
-export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
+export function AlertFeed({ alerts, engineAlerts, replayPhase, onClear }: Props) {
+  const { t } = useT();
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState<Alert | null>(null);
   const [userScrolled, setUserScrolled] = useState(false);
@@ -226,13 +238,13 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
     setShapLoading(false);
   }
 
-  // Use per-engine buffer for XGBOOST/COMMUNITY filters so community alerts are never
-  // squeezed out of the combined 1000-cap array by the high XGBoost volume.
   const filtered =
     filter === "all"
       ? alerts
       : engineAlerts[filter as CoreEngine];
+
   const displayed = filtered.slice(0, 200);
+
 
   useEffect(() => {
     if (alerts.length === prevAlertCount.current) return;
@@ -244,6 +256,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
     if (alerts.length === 0) setUserScrolled(false);
   }, [alerts.length]);
 
+
   function handleScroll(e: React.UIEvent<HTMLDivElement>) {
     setUserScrolled(e.currentTarget.scrollTop > 40);
   }
@@ -253,7 +266,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
       {/* Toolbar */}
       <div className="flex items-center gap-2 flex-wrap pb-2 border-b" style={{ borderColor: "rgba(0,212,255,0.08)" }}>
         <div className="flex gap-1">
-          {FILTERS.map((f) => (
+          {FILTER_KEYS.map((f) => (
             <button
               key={f.value}
               onClick={() => setFilter(f.value)}
@@ -265,7 +278,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
                 letterSpacing: "0.1em",
               }}
             >
-              {f.label}
+              {t(`alerts.${f.key}`)}
             </button>
           ))}
         </div>
@@ -279,7 +292,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
               className="text-[10px] font-mono"
               style={{ color: "rgba(0,212,255,0.5)" }}
             >
-              ↑ TOP
+              {t("alerts.top")}
             </button>
           )}
           <button
@@ -287,7 +300,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
             className="text-[10px] font-mono px-2 py-1 transition-all"
             style={{ border: "1px solid rgba(148,163,184,0.4)", color: "rgba(148,163,184,0.85)", background: "transparent" }}
           >
-            CLEAR
+            {t("alerts.clear")}
           </button>
         </div>
       </div>
@@ -302,14 +315,14 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
           color: "rgba(0,212,255,0.35)",
           letterSpacing: "0.12em",
         }}>
-          <span>TIME</span>
-          <span>SEVERITY</span>
-          <span>GT</span>
-          <span>SOURCE</span>
-          <span>DESTINATION</span>
-          <span>PROTO</span>
-          <span>SCORE</span>
-          <span>TYPE · MESSAGE</span>
+          <span>{t("alerts.col.time")}</span>
+          <span>{t("alerts.col.severity")}</span>
+          <span>{t("alerts.col.gt")}</span>
+          <span>{t("alerts.col.source")}</span>
+          <span>{t("alerts.col.destination")}</span>
+          <span>{t("alerts.col.proto")}</span>
+          <span>{t("alerts.col.score")}</span>
+          <span>{t("alerts.col.typeMessage")}</span>
         </div>
 
         {/* Data rows */}
@@ -334,7 +347,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
                   <SeverityChip alert={a} />
                 </span>
                 <span className="flex items-center">
-                  {gtBadge(a.ground_truth)}
+                  <GtBadge gt={a.ground_truth} />
                 </span>
                 <span className="text-[10px] font-mono truncate" style={{ color }}>
                   {a.src_ip}:{a.src_port}
@@ -355,7 +368,20 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
           {displayed.length === 0 && (
             <div className="flex items-center justify-center py-12">
               <span className="section-label" style={{ color: "rgba(0,212,255,0.2)" }}>
-                {alerts.length === 0 ? "AWAITING ALERTS…" : "NO ALERTS MATCH FILTER"}
+                {alerts.length === 0 ? t("alerts.awaiting") : t("alerts.noMatch")}
+              </span>
+            </div>
+          )}
+          {replayPhase === "draining" && alerts.length > 0 && (
+            <div
+              className="sticky bottom-0 px-3 py-2 text-center"
+              style={{
+                background: "rgba(245,158,11,0.08)",
+                borderTop: "1px solid rgba(245,158,11,0.2)",
+              }}
+            >
+              <span className="text-[9px] font-mono" style={{ color: "#f59e0b", letterSpacing: "0.08em" }}>
+                {t("alerts.drainingNote", { count: alerts.length })}
               </span>
             </div>
           )}
@@ -367,7 +393,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
         <DialogContent className="max-w-lg" style={{ background: "#0f1318", border: "1px solid rgba(0,212,255,0.2)" }}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 font-mono text-sm" style={{ color: "#e2e8f0" }}>
-              ALERT DETAIL
+              {t("alerts.dialog.title")}
               {selected && (
                 <>
                   <SeverityChip alert={selected} />
@@ -379,22 +405,22 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
           {selected && (
             <div className="space-y-4 text-sm">
               <div className="rounded-none p-3 space-y-1.5" style={{ background: "rgba(0,212,255,0.03)", border: "1px solid rgba(0,212,255,0.1)" }}>
-                <Row label="TIME" value={new Date(selected.ts).toISOString()} />
-                <Row label="SOURCE" value={`${selected.src_ip}:${selected.src_port}`} />
-                <Row label="DESTINATION" value={`${selected.dst_ip}:${selected.dst_port}`} />
-                <Row label="PROTOCOL" value={selected.proto} />
-                <Row label="GID:SID" value={`${selected.gid}:${selected.sid}`} />
-                <Row label="MESSAGE" value={selected.msg} />
-                {selected.score != null && <Row label="SCORE" value={selected.score.toFixed(6)} />}
-                <Row label="BAND" value={scoreBand(selected)} />
+                <Row label={t("alerts.dialog.time")} value={new Date(selected.ts).toISOString()} />
+                <Row label={t("alerts.dialog.source")} value={`${selected.src_ip}:${selected.src_port}`} />
+                <Row label={t("alerts.dialog.destination")} value={`${selected.dst_ip}:${selected.dst_port}`} />
+                <Row label={t("alerts.dialog.protocol")} value={selected.proto} />
+                <Row label={t("alerts.dialog.gidSid")} value={`${selected.gid}:${selected.sid}`} />
+                <Row label={t("alerts.dialog.message")} value={selected.msg} />
+                {selected.score != null && <Row label={t("alerts.dialog.score")} value={selected.score.toFixed(6)} />}
+                <Row label={t("alerts.dialog.band")} value={scoreBand(selected)} />
                 {selected.ground_truth && (
-                  <Row label="GROUND TRUTH" value={selected.ground_truth === "attack" ? "REAL ATTACK" : "FALSE ALARM"} />
+                  <Row label={t("alerts.dialog.groundTruth")} value={selected.ground_truth === "attack" ? t("alerts.dialog.realAttack") : t("alerts.dialog.falseAlarm")} />
                 )}
                 {selected.if_label && (
                   <div className="flex gap-3 items-center">
-                    <span className="text-[10px] font-mono w-28 shrink-0" style={{ color: "rgba(0,212,255,0.4)", letterSpacing: "0.1em" }}>IF ANOMALY</span>
+                    <span className="text-[10px] font-mono w-28 shrink-0" style={{ color: "rgba(0,212,255,0.4)", letterSpacing: "0.1em" }}>{t("alerts.dialog.ifAnomaly")}</span>
                     <span className="flex items-center gap-2">
-                      {ifBadge(selected.if_label)}
+                      <IfBadge ifLabel={selected.if_label} />
                       {selected.if_score != null && (
                         <span className="text-[10px] font-mono tabular-nums" style={{ color: "rgba(148,163,184,0.85)" }}>
                           score={selected.if_score.toFixed(4)}
@@ -405,7 +431,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
                 )}
                 {selected.mitre_technique && (
                   <div className="flex gap-3 items-center pt-1 border-t" style={{ borderColor: "rgba(139,92,246,0.12)" }}>
-                    <span className="text-[10px] font-mono w-28 shrink-0" style={{ color: "rgba(139,92,246,0.6)", letterSpacing: "0.1em" }}>MITRE ATT&CK</span>
+                    <span className="text-[10px] font-mono w-28 shrink-0" style={{ color: "rgba(139,92,246,0.6)", letterSpacing: "0.1em" }}>{t("alerts.dialog.mitre")}</span>
                     <span className="flex items-center gap-2 flex-wrap">
                       {mitreBadge(selected.mitre_technique)}
                       {selected.mitre_tactic && (
@@ -436,7 +462,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
                       }}
                     >
                       <p className="text-[9px] font-mono mb-1" style={{ color: "rgba(245,158,11,0.5)", letterSpacing: "0.1em" }}>
-                        AI ANALYSIS
+                        {t("alerts.dialog.aiAnalysis")}
                       </p>
                       <p className="text-[11px] font-mono leading-relaxed" style={{ color: "#e2e8f0" }}>
                         {shapNarrative}
@@ -457,9 +483,9 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
                         cursor: shapLoading ? "wait" : "pointer",
                       }}
                     >
-                      {shapLoading ? "COMPUTING…" : shap ? "RE-EXPLAIN (SHAP)" : "EXPLAIN (SHAP)"}
+                      {shapLoading ? t("alerts.dialog.computing") : shap ? t("alerts.dialog.reExplain") : t("alerts.dialog.explain")}
                     </button>
-                    <span className="text-[9px] font-mono" style={{ color: "rgba(148,163,184,0.65)" }}>top-5 features</span>
+                    <span className="text-[9px] font-mono" style={{ color: "rgba(148,163,184,0.65)" }}>{t("alerts.dialog.topFeatures")}</span>
                   </div>
                   {shapError && (
                     <div className="text-[10px] font-mono p-2" style={{ background: "rgba(255,59,59,0.07)", border: "1px solid rgba(255,59,59,0.2)", color: "#ff3b3b" }}>
@@ -472,7 +498,7 @@ export function AlertFeed({ alerts, engineAlerts, onClear }: Props) {
 
               <details>
                 <summary className="text-[10px] font-mono cursor-pointer select-none" style={{ color: "rgba(0,212,255,0.4)" }}>
-                  RAW JSON ▸
+                  {t("alerts.dialog.rawJson")}
                 </summary>
                 <pre className="mt-2 p-3 text-[10px] overflow-auto max-h-48 font-mono" style={{ background: "rgba(0,0,0,0.4)", border: "1px solid rgba(0,212,255,0.08)", color: "#94a3b8" }}>
                   {JSON.stringify(selected, null, 2)}

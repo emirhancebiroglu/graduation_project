@@ -5,7 +5,7 @@ import logging
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -121,8 +121,8 @@ def _count_alert_lines(path: Path) -> int:
 
 
 async def _compute_and_broadcast_evaluation(run_dir: Path) -> None:
-    """Read alert CSVs, compute confusion matrix for both engines, broadcast result."""
-    from ground_truth import extract_flow_ids_from_alert_csv
+    """Read alert CSVs, compute confusion matrix for all engines, broadcast result."""
+    from ground_truth import extract_flow_ids_from_alert_csv, extract_src_ips_from_alert_csv
 
     logger.info("Computing evaluation for run_dir=%s", run_dir)
 
@@ -131,21 +131,35 @@ async def _compute_and_broadcast_evaluation(run_dir: Path) -> None:
     total_flows = stats["total"]
 
     combined_path = run_dir / "combined" / "alert_csv.txt"
+    if not combined_path.exists():
+        logger.warning("Combined alert CSV not found: %s", combined_path)
+        return
 
-    results = {}
-    # xgboost evaluation: GID:301 (dos_inspector) flows only
-    # community evaluation: GID:1 (community rules) flows only
-    for engine, gid_set in [("xgboost", {301}), ("community", {1})]:
-        alert_path = combined_path
-        if not alert_path.exists():
-            logger.warning("Combined alert CSV not found: %s", alert_path)
-            continue
+    # Engine → GID mapping + evaluation mode
+    # Per-flow engines use flow ID matching; cross-flow engines use IP-level matching
+    ENGINE_CONFIG = [
+        ("xgboost",    {301}, "flow"),   # dos_inspector
+        ("portscan",   {302}, "ip"),     # portscan_inspector
+        ("dos_agg",    {303}, "ip"),     # dos_aggregator
+        ("bot",        {306}, "ip"),     # bot_client_inspector
+        ("bruteforce", {307}, "ip"),     # bruteforce_inspector
+        ("ddos",       {304}, "ip"),     # ddos_aggregator
+        ("community",  {1},   "flow"),   # community rules
+    ]
 
-        flow_ids, _, _ = extract_flow_ids_from_alert_csv(alert_path, gid_filter=gid_set)
-        conf = _gt_loader.compute_confusion(flow_ids)
+    results: dict[str, EngineEvaluation | None] = {}
+
+    for engine, gid_set, mode in ENGINE_CONFIG:
+        if mode == "flow":
+            flow_ids, _, _ = extract_flow_ids_from_alert_csv(combined_path, gid_filter=gid_set)
+            conf = _gt_loader.compute_confusion(flow_ids)
+        else:
+            src_ips = extract_src_ips_from_alert_csv(combined_path, gid_filter=gid_set)
+            conf = _gt_loader.compute_ip_confusion(src_ips)
 
         if "error" in conf:
-            logger.error("Evaluation error for %s: %s", engine, conf["error"])
+            logger.warning("Evaluation error for %s: %s", engine, conf["error"])
+            results[engine] = None
             continue
 
         results[engine] = EngineEvaluation(
@@ -159,21 +173,30 @@ async def _compute_and_broadcast_evaluation(run_dir: Path) -> None:
             f1=round(conf["f1"], 4),
             fpr=round(conf["fpr"], 4),
         )
+        ip_tag = " [IP-level]" if mode == "ip" else ""
         logger.info(
-            "%s evaluation: TP=%d, FP=%d, TN=%d, FN=%d, FPR=%.4f",
-            engine, conf["TP"], conf["FP"], conf["TN"], conf["FN"], conf["fpr"],
+            "%s evaluation%s: TP=%d, FP=%d, TN=%d, FN=%d, FPR=%.4f",
+            engine, ip_tag, conf["TP"], conf["FP"], conf["TN"], conf["FN"], conf["fpr"],
         )
 
-    if "xgboost" in results and "community" in results:
-        payload = EvaluationPayload(
-            xgboost=results["xgboost"],
-            community=results["community"],
-            total_flows=total_flows,
-        )
-        await manager.broadcast(WsEvaluationMessage(data=payload).model_dump_json())
-        logger.info("Evaluation broadcast complete")
-    else:
-        logger.error("Missing results for one or both engines, not broadcasting")
+    xgb_result = results.get("xgboost")
+    comm_result = results.get("community")
+    if xgb_result is None or comm_result is None:
+        logger.error("Missing results for xgboost or community, not broadcasting")
+        return
+
+    payload = EvaluationPayload(
+        xgboost=xgb_result,
+        portscan=results.get("portscan"),
+        dos_agg=results.get("dos_agg"),
+        bot=results.get("bot"),
+        bruteforce=results.get("bruteforce"),
+        ddos=results.get("ddos"),
+        community=comm_result,
+        total_flows=total_flows,
+    )
+    await manager.broadcast(WsEvaluationMessage(data=payload).model_dump_json())
+    logger.info("Evaluation broadcast complete")
 
 # ── IF enrichment ────────────────────────────────────────────────────────────
 
@@ -340,13 +363,30 @@ async def _status_broadcaster() -> None:
 
         if is_this_run and runner.check_natural_exit():
             logger.info("Snort process exited (run_id=%s)", state.run_id)
+            # First broadcast draining phase with progress=100%
+            await manager.broadcast(
+                WsStatusMessage(
+                    data=StatusPayload(
+                        snort_running=True,
+                        pcap_progress=1.0,
+                        phase="draining",
+                    )
+                ).model_dump_json()
+            )
             await _force_evaluation()
             continue
+
+        phase: Literal["processing", "draining", "complete"] = "processing"
+        if state is not None and not runner.is_running() and _active_run_id is None:
+            phase = "complete"
+        elif state is not None and not runner.is_running():
+            phase = "draining"
 
         msg = WsStatusMessage(
             data=StatusPayload(
                 snort_running=runner.is_running(),
                 pcap_progress=runner.pcap_progress(),
+                phase=phase,
                 error=state.error if state else None,
             )
         )
@@ -366,16 +406,16 @@ async def _status_broadcaster() -> None:
 
 
 async def _force_evaluation() -> None:
-    """Stop processes, drain tailers, compute and broadcast evaluation."""
+    """Stop processes, cancel tailers, compute and broadcast evaluation."""
     global _active_run_id
     try:
         await runner.stop()
     except Exception as exc:
         logger.warning("runner.stop() error (ignored): %s", exc)
-    # Give tailers time to drain remaining lines — IF enrichment adds ~0.2s per alert
-    # 27 alerts × 0.2s retry = 5.4s worst case; use 8s to be safe
-    await asyncio.sleep(8.0)
+    # Cancel tailers immediately — no new alerts enter the pipeline
     _cancel_tailers()
+    # Give enrichment tasks time to finish — IF adds ~0.2s per alert
+    await asyncio.sleep(8.0)
     if _current_run_dir is not None:
         await _compute_and_broadcast_evaluation(_current_run_dir)
     else:

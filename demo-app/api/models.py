@@ -78,6 +78,7 @@ class ComparisonSnapshot(BaseModel):
 class StatusPayload(BaseModel):
     snort_running: bool
     pcap_progress: float             # 0.0..1.0
+    phase: Literal["processing", "draining", "complete"] = "processing"
     error: str | None = None
 
 
@@ -129,6 +130,11 @@ class EngineEvaluation(BaseModel):
 
 class EvaluationPayload(BaseModel):
     xgboost: EngineEvaluation
+    portscan: EngineEvaluation | None = None
+    dos_agg: EngineEvaluation | None = None
+    bot: EngineEvaluation | None = None
+    bruteforce: EngineEvaluation | None = None
+    ddos: EngineEvaluation | None = None
     community: EngineEvaluation
     total_flows: int
 

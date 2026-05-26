@@ -1,0 +1,231 @@
+{
+  "header": {
+    "title": "Aegis IDS",
+    "subtitle": "INTRUSION DETECTION SYSTEM",
+    "demoMode": "DEMO MODE",
+    "runAnalysis": "RUN ANALYSIS",
+    "stop": "STOP",
+    "inspectorsActive": "5 INSPECTORS",
+    "standby": "STANDBY",
+    "connected": "CONNECTED",
+    "offline": "OFFLINE"
+  },
+  "phase": {
+    "idle": "SYSTEM IDLE — SELECT REPLAY TO BEGIN DEMONSTRATION",
+    "running": "● LIVE DETECTION — CIC-IDS2017 WEDNESDAY",
+    "draining": "◌ COMPUTING EVALUATION…",
+    "complete": "✓ EVALUATION COMPLETE"
+  },
+  "alertFeedSection": {
+    "live": "LIVE ALERT FEED",
+    "finalizing": "ALERT FEED · FINALIZING",
+    "countSuffix": "alerts · click row to explain"
+  },
+  "footer": {
+    "tag": "AEGIS IDS // CIC-IDS2017 WEDNESDAY // ML ENSEMBLE + COMMUNITY RULES"
+  },
+  "roi": {
+    "titleIdle": "ROI ANALYSIS — BUSINESS IMPACT",
+    "titleLive": "ROI ANALYSIS — LIVE",
+    "titleComplete": "ROI ANALYSIS — BUSINESS IMPACT",
+    "pcapProgress": "PCAP {pct}%",
+    "analystTimeRecovered": "Analyst Time Recovered",
+    "hoursSuffix": "h",
+    "equivalentDays": "Equivalent to ~{days} working days saved (assuming 3 min/alert, 8h/day)",
+    "falseAlarmComparison": "FALSE ALARM COMPARISON",
+    "mlEnsemble": "ML Ensemble",
+    "community": "Community",
+    "fewerFalseAlarms": "−{count} fewer false alarms ({pct}% reduction)",
+    "xgbAccuracy": "XGB ACCURACY",
+    "xgbRecall": "XGB RECALL",
+    "tlSavings": "≈ ₺{amount}/yr analyst cost savings",
+    "tlRate": "Based on ₺280/h SOC analyst rate"
+  },
+  "evaluation": {
+    "title": "PERFORMANCE METRICS — WEDNESDAY CIC-IDS2017",
+    "mlEnsemble": "ML ENSEMBLE",
+    "snortCommunity": "SNORT3 COMMUNITY",
+    "metric": "METRIC",
+    "mlEns": "ML ENS",
+    "comm": "COMM",
+    "accuracy": "Accuracy",
+    "precision": "Precision",
+    "recall": "Recall",
+    "f1": "F1-Score",
+    "fpr": "FPR",
+    "tie": "TIE",
+    "win": "WIN",
+    "awaiting": "AWAITING ANALYSIS...",
+    "flowsEvaluated": "{count} FLOWS EVALUATED · GROUND TRUTH LABELS"
+  },
+  "alerts": {
+    "filterAll": "ALL",
+    "filterXgboost": "ML ENSEMBLE",
+    "filterCommunity": "COMMUNITY",
+    "top": "↑ TOP",
+    "clear": "CLEAR",
+    "col": {
+      "time": "TIME",
+      "severity": "SEVERITY",
+      "gt": "GT",
+      "source": "SOURCE",
+      "destination": "DESTINATION",
+      "proto": "PROTO",
+      "score": "SCORE",
+      "typeMessage": "TYPE · MESSAGE"
+    },
+    "awaiting": "AWAITING ALERTS…",
+    "noMatch": "NO ALERTS MATCH FILTER",
+    "drainingNote": "◌ EVALUATION IN PROGRESS — {count} ALERTS CAPTURED",
+    "sev": {
+      "critical": "CRITICAL",
+      "high": "HIGH",
+      "medium": "MEDIUM",
+      "low": "LOW"
+    },
+    "gt": {
+      "realAttack": "REAL ATTACK",
+      "falseAlarm": "FALSE ALARM"
+    },
+    "anomaly": {
+      "anomaly": "ANOMALY",
+      "known": "KNOWN"
+    },
+    "dialog": {
+      "title": "ALERT DETAIL",
+      "time": "TIME",
+      "source": "SOURCE",
+      "destination": "DESTINATION",
+      "protocol": "PROTOCOL",
+      "gidSid": "GID:SID",
+      "message": "MESSAGE",
+      "score": "SCORE",
+      "band": "BAND",
+      "groundTruth": "GROUND TRUTH",
+      "realAttack": "REAL ATTACK",
+      "falseAlarm": "FALSE ALARM",
+      "ifAnomaly": "IF ANOMALY",
+      "mitre": "MITRE ATT&CK",
+      "rawJson": "RAW JSON ▸",
+      "aiAnalysis": "AI ANALYSIS",
+      "computing": "COMPUTING…",
+      "reExplain": "RE-EXPLAIN (SHAP)",
+      "explain": "EXPLAIN (SHAP)",
+      "topFeatures": "top-5 features",
+      "shapTitle": "FEATURE CONTRIBUTIONS (SHAP)",
+      "shapTowardAttack": "■ pushes toward attack",
+      "shapTowardBenign": "■ pushes toward benign"
+    },
+    "band": {
+      "communityRule": "Community rule match",
+      "noScore": "XGBoost (no score)",
+      "critical": "Critical (score ≥ 0.95)",
+      "high": "High (score ≥ 0.85)",
+      "medium": "Medium (score ≥ 0.70)",
+      "low": "Low"
+    }
+  },
+  "chart": {
+    "title": "DETECTION TIMELINE",
+    "mlEnsemble": "ML ENSEMBLE",
+    "community": "COMMUNITY",
+    "complete": "COMPLETE",
+    "detectedTypes": "DETECTED ATTACK TYPES:",
+    "awaiting": "AWAITING TRAFFIC DATA",
+    "alertsPerSec": "alerts/s",
+    "analysisComplete": "ANALYSIS COMPLETE",
+    "peak": "PEAK",
+    "engineLabels": {
+      "DoS": "DoS",
+      "Scan": "Scan",
+      "DDoS": "DDoS",
+      "Bot": "Bot",
+      "BruteF": "BruteF",
+      "Comm": "Comm"
+    },
+    "tooltipMl": "ML ENSEMBLE",
+    "tooltipComm": "COMMUNITY",
+    "tooltipTotal": "TOTAL"
+  },
+  "mitre": {
+    "buttonLabel": "MITRE",
+    "title": "MITRE ATT&CK MAP",
+    "subtitle": "Detected techniques — live alert counts",
+    "noAlerts": "Awaiting alerts… start analysis",
+    "alertsSuffix": "alerts",
+    "tactics": {
+      "discovery": "DISCOVERY",
+      "credential": "CREDENTIAL ACCESS",
+      "c2": "COMMAND & CONTROL",
+      "impact": "IMPACT"
+    },
+    "footerNote": "MITRE ATT&CK® framework — real detections only"
+  },
+  "coverage": {
+    "buttonLabel": "COVERAGE",
+    "title": "DETECTION COVERAGE",
+    "modelsActive": "{n}/{total} MODELS ACTIVE",
+    "recall": "RECALL",
+    "precision": "PRECISION",
+    "dataset": "DATASET",
+    "footerEvaluated": "EVALUATED · CIC-IDS2017 · LOCKED METRICS",
+    "footerCriteriaMet": "ALL CRITERIA MET ✓",
+    "models": {
+      "dos": "DoS Inspector",
+      "portscan": "PortScan",
+      "ddos": "DDoS Aggregator",
+      "bot": "Botnet Client",
+      "bruteforce": "Brute Force"
+    },
+    "attacks": {
+      "dos": "DoS / Slowloris / Hulk",
+      "portscan": "TCP SYN Port Scan",
+      "ddos": "Distributed SYN / HTTP Flood",
+      "bot": "Botnet C2 Beaconing",
+      "bruteforce": "SSH / FTP Brute Force"
+    }
+  },
+  "narration": {
+    "dos": "{src} launched SYN flood against {dst}",
+    "portscan": "{src} is port-scanning {dst}",
+    "bot": "{src} sending botnet C2 beacon → {dst}",
+    "bruteforce": "{src} brute-forcing SSH on {dst}",
+    "dos_agg": "DDoS coordination detected — source: {src}",
+    "community": "Snort3 signature match: {src} → {dst}",
+    "detected": "Aegis detected in {elapsed}s",
+    "score": "Score"
+  },
+  "arcx": {
+    "buttonLabel": "INTEGRATION",
+    "title": "ARCX PLATFORM INTEGRATION",
+    "subtitle": "Aegis integrates as a fourth layer alongside existing ARCX modules",
+    "platformLabel": "ARCX AIOps Dashboard",
+    "existingModules": "EXISTING MODULES",
+    "newModule": "NEW — AEGIS",
+    "mod1Title": "Server Performance",
+    "mod1Desc": "CPU · Memory · Disk · Process monitoring",
+    "mod2Title": "Network Outage",
+    "mod2Desc": "Latency · Packet loss · SLA breach",
+    "mod3Title": "SLA Warning",
+    "mod3Desc": "Uptime · Response time · Threshold breach",
+    "mod4Title": "Security Threat",
+    "mod4Desc": "DoS · Port Scan · Botnet · DDoS · Brute Force",
+    "mod4Badge": "AEGIS IDS",
+    "liveAlerts": "LIVE AEGIS ALERTS → ARCX",
+    "noAlerts": "Awaiting alerts… start analysis",
+    "flowLabel": "AEGIS → ARCX",
+    "footerLeft": "REST API · WebHook · Syslog integration support",
+    "footerRight": "OEM / White-label ready"
+  },
+  "toast": {
+    "started": "Full Wednesday replay started",
+    "stopped": "Replay stopped",
+    "startFail": "Failed to start replay: {err}",
+    "stopFail": "Failed to stop: {err}"
+  },
+  "language": {
+    "label": "LANG",
+    "tr": "TR",
+    "en": "EN"
+  }
+}

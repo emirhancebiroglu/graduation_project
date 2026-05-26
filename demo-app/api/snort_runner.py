@@ -95,9 +95,13 @@ class SnortRunner:
     def pcap_progress(self) -> float:
         if self._state is None or self._state.status != RunStatus.running:
             return 0.0
+        # If snort process exited naturally, progress is complete
+        if self._proc is not None and self._proc.poll() is not None:
+            return 1.0
         elapsed = (datetime.now(timezone.utc) - self._state.started_at).total_seconds()
         wall_clock = PCAP_REPLAY_WALL_CLOCK.get(self._state.pcap_name, self._state.pcap_duration_s)
-        return min(elapsed / wall_clock, 1.0)
+        # Cap at 99% while still processing — final jump to 100% happens on exit
+        return min(elapsed / wall_clock, 0.99)
 
     async def start(
         self,
