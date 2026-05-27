@@ -12,6 +12,7 @@ class Engine(str, Enum):
     community = "community"   # GID:1   community rules
     portscan = "portscan"     # GID:302 portscan_inspector
     dos_agg = "dos_agg"       # GID:303 dos_aggregator
+    ddos = "ddos"             # GID:304 ddos_aggregator
     bot = "bot"               # GID:306 bot_client_inspector
     bruteforce = "bruteforce" # GID:307 bruteforce_inspector
 
@@ -20,6 +21,19 @@ class PcapName(str, Enum):
     normal_2min = "normal_2min"
     dos_hulk_2min = "dos_hulk_2min"
     full_wednesday = "full_wednesday"
+    scenario_dos = "scenario_dos"
+    scenario_portscan = "scenario_portscan"
+    scenario_bruteforce = "scenario_bruteforce"
+    scenario_bot = "scenario_bot"
+    scenario_ddos = "scenario_ddos"
+
+
+class ScenarioKey(str, Enum):
+    dos = "dos"
+    portscan = "portscan"
+    bruteforce = "bruteforce"
+    bot = "bot"
+    ddos = "ddos"
 
 
 class Proto(str, Enum):
@@ -153,12 +167,78 @@ WsMessage = Annotated[
 # ── REST request/response shapes ─────────────────────────────────────────────
 
 class ReplayRequest(BaseModel):
-    pcap: PcapName
+    pcap: PcapName | None = None
+    scenario: ScenarioKey | None = None
 
 
 class ReplayStartResponse(BaseModel):
     ok: bool = True
     run_id: str
+
+
+# ── Scenario registry payloads ────────────────────────────────────────────────
+
+MetricLevel = Literal["flow", "window"]
+
+
+class ScenarioConfusion(BaseModel):
+    TP: int | None = None
+    FP: int | None = None
+    FN: int | None = None
+    TN: int | None = None
+    TP_windows: int | None = None
+    FP_windows: int | None = None
+    FN_windows: int | None = None
+    TN_windows: int | None = None
+
+
+class ScenarioMlBlock(BaseModel):
+    alerts: int
+    confusion: ScenarioConfusion
+    accuracy: float | None = None
+    precision: float | None = None
+    recall: float | None = None
+    f1: float | None = None
+    fpr: float | None = None
+    avg_score: float | None = None
+    attacker_ips_detected: str | None = None
+    window_recall: float | None = None
+    syn_coverage: float | None = None
+    target: str | None = None
+    dedup_seconds: int | None = None
+    attacker_ip_list: list[str] | None = None
+    windows_per_ip_range: str | None = None
+    score_range: list[float] | None = None
+
+
+class ScenarioCommunityBlock(BaseModel):
+    alerts_total_day: int
+    alerts_on_attackers: int
+    fpr: float
+    confusion: ScenarioConfusion | None = None
+
+
+class ScenarioDisplay(BaseModel):
+    title_key: str
+    attack_label: str
+    dataset_label: str
+    generalization_chip: str
+
+
+class ScenarioPayload(BaseModel):
+    key: ScenarioKey
+    pcap_name: PcapName
+    active_engine: Engine
+    metric_level: MetricLevel
+    gt_loader_day: str
+    ml: ScenarioMlBlock
+    community: ScenarioCommunityBlock
+    display: ScenarioDisplay
+
+
+class ScenariosListResponse(BaseModel):
+    scenarios: list[ScenarioPayload]
+    default: ScenarioKey
 
 
 class HealthResponse(BaseModel):

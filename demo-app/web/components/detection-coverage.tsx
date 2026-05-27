@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useT } from "@/lib/i18n";
+import type { ScenarioPayload } from "@/lib/types";
 
 type ModelKey = "dos" | "portscan" | "ddos" | "bot" | "bruteforce";
 
@@ -16,21 +17,21 @@ type ModelEntry = {
 
 const MODELS: ModelEntry[] = [
   { key: "dos",        gid: 301, dataset: "CIC Wed", recall: "99.99%",      precision: "97.16%", fp: "FPR 1.68%", status: "pass" },
-  { key: "portscan",   gid: 302, dataset: "CIC Fri", recall: "91% window",  precision: "FP = 0", fp: "FP 0",      status: "pass" },
   { key: "ddos",       gid: 304, dataset: "CIC Fri", recall: "20 attack wins", precision: "FP = 0", fp: "FP 0",   status: "pass" },
-  { key: "bot",        gid: 306, dataset: "CIC Fri", recall: "85.7%",       precision: "75.0%",  fp: "FP ≤ 5",   status: "pass" },
+  { key: "portscan",   gid: 302, dataset: "CIC Fri", recall: "91% window",  precision: "FP = 0", fp: "FP 0",      status: "pass" },
   { key: "bruteforce", gid: 307, dataset: "CIC Tue", recall: "100%",        precision: "FPR ~0%", fp: "FP ≤ 2",  status: "pass" },
+  { key: "bot",        gid: 306, dataset: "CIC Fri", recall: "85.7%",       precision: "75.0%",  fp: "FP ≤ 5",   status: "pass" },
 ];
 
 const GID_COLOR: Record<number, { text: string; border: string; bg: string; glow: string }> = {
   301: { text: "#ff3b3b", border: "rgba(255,59,59,0.25)", bg: "rgba(255,59,59,0.04)", glow: "0 0 12px rgba(255,59,59,0.12)" },
-  302: { text: "#f59e0b", border: "rgba(245,158,11,0.22)", bg: "rgba(245,158,11,0.04)", glow: "0 0 12px rgba(245,158,11,0.08)" },
-  304: { text: "#e879f9", border: "rgba(232,121,249,0.22)", bg: "rgba(232,121,249,0.04)", glow: "0 0 12px rgba(232,121,249,0.08)" },
-  306: { text: "#38bdf8", border: "rgba(56,189,248,0.22)", bg: "rgba(56,189,248,0.04)", glow: "0 0 12px rgba(56,189,248,0.08)" },
-  307: { text: "#34d399", border: "rgba(52,211,153,0.22)", bg: "rgba(52,211,153,0.04)", glow: "0 0 12px rgba(52,211,153,0.08)" },
+  304: { text: "#f97316", border: "rgba(249,115,22,0.22)", bg: "rgba(249,115,22,0.04)", glow: "0 0 12px rgba(249,115,22,0.08)" },
+  302: { text: "#a855f7", border: "rgba(168,85,247,0.22)", bg: "rgba(168,85,247,0.04)", glow: "0 0 12px rgba(168,85,247,0.08)" },
+  307: { text: "#facc15", border: "rgba(250,204,21,0.22)", bg: "rgba(250,204,21,0.04)", glow: "0 0 12px rgba(250,204,21,0.08)" },
+  306: { text: "#ec4899", border: "rgba(236,72,153,0.22)", bg: "rgba(236,72,153,0.04)", glow: "0 0 12px rgba(236,72,153,0.08)" },
 };
 
-function ModelCard({ m }: { m: ModelEntry }) {
+function ModelCard({ m, active }: { m: ModelEntry; active: boolean }) {
   const { t } = useT();
   const c = GID_COLOR[m.gid];
   const name = t(`coverage.models.${m.key}`);
@@ -38,7 +39,11 @@ function ModelCard({ m }: { m: ModelEntry }) {
   return (
     <div
       className="relative flex flex-col gap-2 p-3 overflow-hidden"
-      style={{ border: `1px solid ${c.border}`, background: c.bg, boxShadow: c.glow }}
+      style={{
+        border: `1px solid ${active ? c.text : c.border}`,
+        background: c.bg,
+        boxShadow: active ? `${c.glow}, 0 0 0 1px ${c.text}40` : c.glow,
+      }}
     >
       <div className="absolute top-0 left-0 w-2 h-2 border-t border-l" style={{ borderColor: c.border }} />
       <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r" style={{ borderColor: c.border }} />
@@ -50,6 +55,11 @@ function ModelCard({ m }: { m: ModelEntry }) {
         <span className="text-[10px] font-mono font-semibold truncate" style={{ color: c.text, letterSpacing: "0.06em" }}>
           {name.toUpperCase()}
         </span>
+        {active && (
+          <span className="text-[8px] font-mono px-1 py-0.5 shrink-0" style={{ border: `1px solid ${c.text}`, background: `${c.text}20`, color: c.text }}>
+            ACTIVE
+          </span>
+        )}
         <span className="ml-auto text-[10px] font-mono" style={{ color: "#10b981" }}>✓</span>
       </div>
 
@@ -75,9 +85,10 @@ function ModelCard({ m }: { m: ModelEntry }) {
   );
 }
 
-export function DetectionCoverage() {
+export function DetectionCoverage({ scenario }: { scenario?: ScenarioPayload | null }) {
   const { t } = useT();
   const [open, setOpen] = useState(false);
+  const activeKey: ModelKey | null = scenario?.key ?? null;
 
   return (
     <>
@@ -179,7 +190,7 @@ export function DetectionCoverage() {
           {/* Cards */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
             {MODELS.map((m) => (
-              <ModelCard key={m.gid} m={m} />
+              <ModelCard key={m.gid} m={m} active={m.key === activeKey} />
             ))}
           </div>
 

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """train_bot_client_v4.py — Retrain bot client model from Snort dump files.
 - 22 features (match C++ AGG_FEATURE_COUNT=22)
-- Correct bot IP set: CICIDS Friday ground truth (3 .5 .6 .8 .9 .14 .25)
-- Excludes .12 .15 .17 from positives (they were wrongly included in v2)
+- Correct bot IP set: CICIDS Friday ground truth (.5 .8 .9 .12 .14 .15 .17)
 - Labels by src_ip column in dump files
 """
 import numpy as np
@@ -13,8 +12,8 @@ from pathlib import Path
 from sklearn.model_selection import train_test_split
 warnings.filterwarnings('ignore')
 
-DUMP_DIR = Path('/home/emirhan/bitirme/data/snort_dump/bot_client')
-# Dump column order (24 cols total):
+DUMP_DIR = Path('/tmp/botcl_dump')
+# Dump column order (25 cols total):
 # lb  syn_cnt dst_ips dst_ports iat_cv entropy port_ratio rate ip_conc ip_ratio
 # ip_ent iat_q90 time_den p_ip_r hshake inc_r data_d rst_r int_ratio in_bytes
 # fin_ratio push_ratio tcp_win score src_ip
@@ -35,19 +34,16 @@ FEAT_NAMES = [
     'bytes_per_syn', 'fin_ratio', 'push_ratio', 'mean_window'
 ]
 
-# Correct CICIDS Friday bot IPs (decimal)
+# Correct CICIDS Friday bot IPs (decimal) — standard 7 bot IPs from CIC-IDS2017
 BOT_IPS_CICIDS = {
-    3232238083,  # 192.168.10.3
     3232238085,  # 192.168.10.5
-    3232238086,  # 192.168.10.6
     3232238088,  # 192.168.10.8
     3232238089,  # 192.168.10.9
+    3232238092,  # 192.168.10.12
     3232238094,  # 192.168.10.14
-    3232238105,  # 192.168.10.25
+    3232238095,  # 192.168.10.15
+    3232238097,  # 192.168.10.17
 }
-
-# CTU-13 bot IPs (from binetflow, decimal). Will be detected from ctu13 dumps.
-# Labels by ip_filter only.
 
 def load_dump(path, bot_ips=None):
     """Load dump. Returns (X, y).
@@ -61,11 +57,9 @@ def load_dump(path, bot_ips=None):
     if data.ndim == 1:
         data = data.reshape(1, -1)
     if data.shape[1] < 25:
-        # Try 24-col (no score col? unlikely, but handle)
         if data.shape[1] < 24:
             print(f"  WARN: {path.name} has only {data.shape[1]} cols, expected >=25")
             return None, None
-        # 24 cols: src_ip at col 23
         X = data[:, 1:23].astype(np.float64)
         src_ips = data[:, 23].astype(np.uint64)
     else:
@@ -78,55 +72,56 @@ def load_dump(path, bot_ips=None):
         y = np.zeros(len(X), dtype=np.int32)
     return X, y
 
-print("=== Bot Client Model v4 Training ===")
+print("=== Bot Client Model v4 Correction Training ===")
 print(f"Features ({N_FEATURES}): {FEAT_NAMES}\n")
 print(f"Bot IPs: {sorted(BOT_IPS_CICIDS)}\n")
 
 all_X, all_y = [], []
 
-# Friday dump — labeled by correct bot IPs
-path = DUMP_DIR / 'friday_dump.txt'
+# CIC Friday — labeled by correct bot IPs
+path = DUMP_DIR / 'cicids_Friday.txt'
 X, y = load_dump(path, BOT_IPS_CICIDS)
 if X is not None:
     pos, neg = y.sum(), (y==0).sum()
-    print(f"  friday_dump.txt: {len(X)} rows, pos={pos}, neg={neg}")
+    print(f"  cicids_Friday.txt: {len(X)} rows, pos={pos}, neg={neg}")
     all_X.append(X); all_y.append(y)
 
-# CTU-13 dumps — bot IPs from binetflow (non-standard, all rows are bot windows)
-# ctu13_s1/s2/s3: label all rows as positive (they're from botnet scenarios)
-for fname in ['ctu13_s1_dump.txt', 'ctu13_s2_dump.txt', 'ctu13_s3_dump.txt']:
-    path = DUMP_DIR / fname
-    if not path.exists():
-        print(f"  SKIP: {fname}")
-        continue
-    X, _ = load_dump(path, bot_ips=None)
-    if X is None:
-        continue
-    y = np.ones(len(X), dtype=np.int32)
-    print(f"  {fname}: {len(X)} rows, all positive (CTU-13 bot)")
-    all_X.append(X); all_y.append(y)
-
-# ISOT dump — positive
-path = DUMP_DIR / 'isot_init3_dump.txt'
-if path.exists():
-    X, _ = load_dump(path, bot_ips=None)
-    if X is not None:
-        y = np.ones(len(X), dtype=np.int32)
-        print(f"  isot_init3_dump.txt: {len(X)} rows, all positive (ISOT bot)")
-        all_X.append(X); all_y.append(y)
-
-# Benign dumps — all negative
-for fname in ['monday_dump.txt', 'tuesday_dump.txt', 'wednesday_dump.txt', 'thursday_dump.txt']:
-    path = DUMP_DIR / fname
-    if not path.exists():
-        print(f"  SKIP: {fname}")
-        continue
+# CIC Mon-Thu — all benign
+for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday']:
+    path = DUMP_DIR / f'cicids_{day}.txt'
     X, _ = load_dump(path, bot_ips=None)
     if X is None:
         continue
     y = np.zeros(len(X), dtype=np.int32)
-    print(f"  {fname}: {len(X)} rows, all benign")
+    print(f"  cicids_{day}.txt: {len(X)} rows, all benign")
     all_X.append(X); all_y.append(y)
+
+# MTA Xworm — external C2 bot (all positive)
+path = DUMP_DIR / 'mta_xworm.txt'
+if path.exists():
+    X, _ = load_dump(path, bot_ips=None)
+    if X is not None:
+        y = np.ones(len(X), dtype=np.int32)
+        print(f"  mta_xworm.txt: {len(X)} rows, all positive (Xworm C2)")
+        all_X.append(X); all_y.append(y)
+
+# MTA 31-Jan — malware C2 (all positive)
+path = DUMP_DIR / 'mta_31jan.txt'
+if path.exists():
+    X, _ = load_dump(path, bot_ips=None)
+    if X is not None:
+        y = np.ones(len(X), dtype=np.int32)
+        print(f"  mta_31jan.txt: {len(X)} rows, all positive (malware C2)")
+        all_X.append(X); all_y.append(y)
+
+# MTA 28-Feb — benign
+path = DUMP_DIR / 'mta_28feb.txt'
+if path.exists():
+    X, _ = load_dump(path, bot_ips=None)
+    if X is not None:
+        y = np.zeros(len(X), dtype=np.int32)
+        print(f"  mta_28feb.txt: {len(X)} rows, all benign")
+        all_X.append(X); all_y.append(y)
 
 X_all = np.vstack(all_X)
 y_all = np.concatenate(all_y)

@@ -24,6 +24,22 @@
   "footer": {
     "tag": "AEGIS IDS // CIC-IDS2017 WEDNESDAY // ML ENSEMBLE + COMMUNITY RULES"
   },
+  "detectionSummary": {
+    "title": "DETECTION SUMMARY",
+    "attackerIpsDetected": "ATTACKER IPs DETECTED",
+    "alertWindows": "ALERT WINDOWS",
+    "falsePositiveWindows": "FALSE POSITIVE WINDOWS",
+    "falseNegativeWindows": "FALSE NEGATIVE WINDOWS",
+    "avgScore": "AVG SCORE",
+    "communityBaseline": "COMMUNITY BASELINE",
+    "fpIps": "FALSE POSITIVE IPs",
+    "fpr": "FPR",
+    "totalFlowAlerts": "TOTAL FLOW ALERTS",
+    "windowRecall": "WINDOW RECALL",
+    "synCoverage": "SYN COVERAGE",
+    "windowCount": "{count} windows",
+    "scoreRange": "SCORE RANGE"
+  },
   "roi": {
     "titleIdle": "ROI ANALYSIS — BUSINESS IMPACT",
     "titleLive": "ROI ANALYSIS — LIVE",
@@ -33,13 +49,16 @@
     "hoursSuffix": "h",
     "equivalentDays": "Equivalent to ~{days} working days saved (assuming 3 min/alert, 8h/day)",
     "falseAlarmComparison": "FALSE ALARM COMPARISON",
+    "alertVolumeComparison": "ALERT TRIAGE VOLUME",
     "mlEnsemble": "ML Ensemble",
     "community": "Community",
     "fewerFalseAlarms": "−{count} fewer false alarms ({pct}% reduction)",
+    "fewerAlertsToTriage": "−{count} fewer alerts to triage ({pct}% reduction)",
     "xgbAccuracy": "XGB ACCURACY",
     "xgbRecall": "XGB RECALL",
     "tlSavings": "≈ ₺{amount}/yr analyst cost savings",
-    "tlRate": "Based on ₺280/h SOC analyst rate"
+    "tlRate": "Based on ₺280/h SOC analyst rate",
+    "reductionMultiplier": "≈ {x}× fewer alerts to triage"
   },
   "evaluation": {
     "title": "PERFORMANCE METRICS — WEDNESDAY CIC-IDS2017",
@@ -56,7 +75,8 @@
     "tie": "TIE",
     "win": "WIN",
     "awaiting": "AWAITING ANALYSIS...",
-    "flowsEvaluated": "{count} FLOWS EVALUATED · GROUND TRUTH LABELS"
+    "flowsEvaluated": "{count} FLOWS EVALUATED · GROUND TRUTH LABELS",
+    "frozenBaseline": "{dataset} · FROZEN BASELINE · FULL-DAY GROUND TRUTH"
   },
   "alerts": {
     "filterAll": "ALL",
@@ -193,7 +213,11 @@
     "dos_agg": "DDoS coordination detected — source: {src}",
     "community": "Snort3 signature match: {src} → {dst}",
     "detected": "Aegis detected in {elapsed}s",
-    "score": "Score"
+    "score": "Score",
+    "dos_agg_window": "DDoS coordination — {src} ({windows} alert windows)",
+    "portscan_window": "{src} port scan detected ({windows} windows)",
+    "bot_window": "{src} bot C2 beaconing ({windows} windows)",
+    "bruteforce_window": "{src} brute force attack ({windows} windows)"
   },
   "arcx": {
     "buttonLabel": "INTEGRATION",
@@ -213,12 +237,19 @@
     "mod4Badge": "AEGIS IDS",
     "liveAlerts": "LIVE AEGIS ALERTS → ARCX",
     "noAlerts": "Awaiting alerts… start analysis",
+    "waiting": "Waiting for ML detections…",
     "flowLabel": "AEGIS → ARCX",
     "footerLeft": "REST API · WebHook · Syslog integration support",
     "footerRight": "OEM / White-label ready"
   },
   "toast": {
-    "started": "Full Wednesday replay started",
+    "started": {
+      "dos": "DoS scenario started",
+      "ddos": "DDoS scenario started",
+      "portscan": "PortScan scenario started",
+      "bruteforce": "Brute Force scenario started",
+      "bot": "Bot Client scenario started"
+    },
     "stopped": "Replay stopped",
     "startFail": "Failed to start replay: {err}",
     "stopFail": "Failed to stop: {err}"
@@ -227,5 +258,40 @@
     "label": "LANG",
     "tr": "TR",
     "en": "EN"
+  },
+  "scenarios": {
+    "title": "ATTACK SCENARIO",
+    "subtitle": "Select scenario to load its sliced PCAP and frozen baseline",
+    "disabledHint": "stop replay to switch",
+    "dos": {
+      "title": "DoS",
+      "description": "Hulk, GoldenEye, Slowloris and Slowhttptest floods. Per-flow XGBoost.",
+      "modelLine": "XGBoost · per-flow · 15 features",
+      "generalizationChip": "UNSW Recall ≥ 0.81 · Wed FPR 1.68%"
+    },
+    "ddos": {
+      "title": "DDoS",
+      "description": "LOIT HTTP flood against the web server. IP-level aggregator.",
+      "modelLine": "DoS Aggregator · IP-window · GID:303",
+      "generalizationChip": "Wed + Fri: Recall 1.0 · 0 FP"
+    },
+    "portscan": {
+      "title": "PortScan",
+      "description": "TCP SYN scan against the subnet. Window-level aggregator.",
+      "modelLine": "PortScan Inspector · 60s window · 7 features",
+      "generalizationChip": "Cupid 2/2 PASS"
+    },
+    "bruteforce": {
+      "title": "Brute Force",
+      "description": "SSH-Patator + FTP-Patator credential guessing.",
+      "modelLine": "BruteForce LSTM · 120s window · GID:307",
+      "generalizationChip": "10/10 synthetic tools (Patator, Hydra, Medusa…)"
+    },
+    "bot": {
+      "title": "Bot Client",
+      "description": "7 hosts beaconing the ARES C2. Cross-flow inspector.",
+      "modelLine": "Bot Client · 300s window · 22 features",
+      "generalizationChip": "MTA Xworm C2 @ 0.874"
+    }
   }
 }

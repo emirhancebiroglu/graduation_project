@@ -18,6 +18,25 @@
 #include "scaler_loader.h"
 
 static const char* s_name = "dos_aggregator";
+
+// Write src_ip→score to /tmp/aegis_scores.jsonl immediately (fflush) so API
+// can read it without waiting for Snort's stdout buffer to drain.
+static void write_score_file(uint32_t src_ip, float score, const char* engine,
+                             const double* feats, unsigned n_feats) {
+    static FILE* sf = nullptr;
+    if (!sf) sf = fopen("/tmp/aegis_scores.jsonl", "w");
+    if (!sf) return;
+    fprintf(sf, "{\"engine\":\"%s\",\"src_ip\":\"%u.%u.%u.%u\",\"score\":%.6f,\"features\":[",
+        engine,
+        (src_ip>>24)&0xFF,(src_ip>>16)&0xFF,(src_ip>>8)&0xFF,src_ip&0xFF,
+        score);
+    for (unsigned i = 0; i < n_feats; i++) {
+        if (i > 0) fprintf(sf, ",");
+        fprintf(sf, "%.6f", feats[i]);
+    }
+    fprintf(sf, "]}\n");
+    fflush(sf);
+}
 static const char* s_help = "cross-flow DoS detection via SYN rate aggregation";
 static const uint32_t DOS_GID = 303, DOS_SID = 1;
 
@@ -101,14 +120,43 @@ public:
         double now = 0;
         if (p->pkth) now = p->pkth->ts.tv_sec + p->pkth->ts.tv_usec / 1e6;
 
+        uint32_t src = gsip(p);
+        if (src == 0) return;
+
+        // Emit deferred alert if current packet belongs to a pending-alert profile.
+        // This ensures queue_event is called in the context of the attacker's own packet.
+        {
+            auto it = profs.find(src);
+            if (it != profs.end() && it->second.alert_pending) {
+                auto& pp = it->second;
+                pp.alert_pending = false;
+                n_alert++;
+                snort::DetectionEngine::queue_event(DOS_GID, DOS_SID);
+                snort::LogMessage("[dos_agg] ALERT (deferred): %u.%u.%u.%u score=%.4f\n",
+                    (pp.src_ip>>24)&0xFF,(pp.src_ip>>16)&0xFF,(pp.src_ip>>8)&0xFF,pp.src_ip&0xFF,
+                    pp.pending_score);
+            }
+        }
+
+        // Periodic sweep on every packet: run inference on expired windows,
+        // mark alert_pending rather than calling queue_event (wrong packet context).
+        {
+            static uint32_t sweep = 0;
+            if (++sweep % 1000 == 0) {
+                for (auto& kv : profs) {
+                    auto& pp = kv.second;
+                    if (!pp.inference_done && pp.syn_count >= mn && pp.is_window_expired(now, ws))
+                        infer_deferred(pp, now);
+                }
+            }
+        }
+
         // Count every TCP SYN-only packet per source IP
         if (!p->ptrs.tcph || !p->ptrs.tcph->is_syn_only()) return;
 
-        uint32_t src = gsip(p);
         uint32_t dst = 0;
         const snort::SfIp* dip = p->ptrs.ip_api.get_dst();
         if (dip && dip->is_ip4()) dst = ntohl(dip->get_ip4_value());
-        if (src == 0) return;
 
         uint16_t sp = p->ptrs.tcph->src_port();
         uint16_t dp = p->ptrs.tcph->dst_port();
@@ -128,16 +176,9 @@ public:
         pr.add_syn(dst, dp, sp);
         if (!pr.inference_done && pr.syn_count >= mn && pr.is_window_expired(now, ws))
             infer(pr, now);
-
-        // Periodic sweep for expired windows
-        static uint32_t sweep = 0;
-        if (++sweep % 1000 == 0) {
-            for (auto& kv : profs) {
-                auto& pp = kv.second;
-                if (!pp.inference_done && pp.syn_count >= mn && pp.is_window_expired(now, ws))
-                    infer(pp, now);
-            }
-        }
+        // Early-fire for clearly massive SYN floods — no need to wait for window expiry.
+        if (!pr.inference_done && pr.syn_count >= 1000)
+            infer(pr, now);
     }
 
 private:
@@ -145,6 +186,29 @@ private:
     Xgb xgb;
     std::unordered_map<uint32_t, DasAggProfile> profs;
     static std::atomic<uint64_t> n_inf, n_alert;
+
+    // Run inference and mark alert_pending — used by sweep so queue_event fires
+    // on the next packet FROM the attacker (correct src_ip in alert_csv).
+    void infer_deferred(DasAggProfile& pr, double now) {
+        double raw[7], proc[7];
+        pr.compute_features(raw, ws);
+        memcpy(proc, raw, sizeof(raw));
+        DasAggProfile::preprocess(proc, g_scaler);
+        float f[7]; for (unsigned i=0;i<7;i++) f[i] = proc[i];
+        float score = 0; if (xgb.ok()) xgb.run(f, score);
+        pr.inference_done = true; n_inf++;
+        snort::LogMessage("[dos_agg] %u.%u.%u.%u syns=%u ports=%zu ips=%zu rate=%.1f score=%.4f\n",
+            (pr.src_ip>>24)&0xFF,(pr.src_ip>>16)&0xFF,(pr.src_ip>>8)&0xFF,pr.src_ip&0xFF,
+            pr.syn_count, pr.syn_dst_ports.size(), pr.syn_dst_ips.size(),
+            raw[6], score);
+        if (score > thr) {
+            write_score_file(pr.src_ip, score, "dos_agg", raw, 7);
+            pr.alert_pending = true;
+            pr.pending_score = score;
+            snort::LogMessage("[dos_agg] ALERT pending: %u.%u.%u.%u score=%.4f\n",
+                (pr.src_ip>>24)&0xFF,(pr.src_ip>>16)&0xFF,(pr.src_ip>>8)&0xFF,pr.src_ip&0xFF, score);
+        }
+    }
 
     void infer(DasAggProfile& pr, double now) {
         double raw[7], proc[7];
@@ -172,6 +236,7 @@ private:
             raw[6], score);
 
         if (alert) {
+            write_score_file(pr.src_ip, score, "dos_agg", raw, 7);
             n_alert++; snort::DetectionEngine::queue_event(DOS_GID, DOS_SID);
             snort::LogMessage("[dos_agg] ALERT: %u.%u.%u.%u score=%.4f\n",
                 (pr.src_ip>>24)&0xFF,(pr.src_ip>>16)&0xFF,(pr.src_ip>>8)&0xFF,pr.src_ip&0xFF, score);

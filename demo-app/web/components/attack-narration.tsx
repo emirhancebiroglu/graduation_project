@@ -1,26 +1,29 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useT } from "@/lib/i18n";
-import type { Alert, ReplayPhase } from "@/lib/types";
+import type { Alert, MetricLevel, ReplayPhase } from "@/lib/types";
 
 type Props = {
   alerts: Alert[];
   replayPhase: ReplayPhase;
   replayStartedAt: number | null;
+  metricLevel?: MetricLevel;
 };
 
 const ENGINE_COLOR: Record<string, string> = {
   xgboost:    "#ff3b3b",
-  portscan:   "#f59e0b",
-  dos_agg:    "#e879f9",
-  bot:        "#38bdf8",
-  bruteforce: "#34d399",
+  portscan:   "#a855f7",
+  dos_agg:    "#f97316",
+  ddos:       "#f97316",
+  bot:        "#ec4899",
+  bruteforce: "#facc15",
 };
 
 const ENGINE_LABEL: Record<string, string> = {
   xgboost:    "DoS",
   portscan:   "PortScan",
   dos_agg:    "DDoS",
+  ddos:       "DDoS",
   bot:        "Bot",
   bruteforce: "BruteForce",
 };
@@ -29,26 +32,39 @@ const NARRATION_KEY: Record<string, string> = {
   xgboost:    "narration.dos",
   portscan:   "narration.portscan",
   dos_agg:    "narration.dos_agg",
+  ddos:       "narration.dos_agg",
   bot:        "narration.bot",
   bruteforce: "narration.bruteforce",
 };
 
+const NARRATION_WINDOW_KEY: Record<string, string> = {
+  dos_agg:    "narration.dos_agg_window",
+  ddos:       "narration.dos_agg_window",
+  portscan:   "narration.portscan_window",
+  bot:        "narration.bot_window",
+  bruteforce: "narration.bruteforce_window",
+};
+
 // Only ML engines — community is Snort rule match, not meaningful for narration
-const ML_ENGINES = new Set(["xgboost", "portscan", "dos_agg", "bot", "bruteforce"]);
+const ML_ENGINES = new Set(["xgboost", "portscan", "dos_agg", "ddos", "bot", "bruteforce"]);
 
 const DISPLAY_MS = 7000;
 const FADE_MS = 600;
 
-export function AttackNarration({ alerts, replayPhase, replayStartedAt }: Props) {
+export function AttackNarration({ alerts, replayPhase, replayStartedAt, metricLevel }: Props) {
   const { t } = useT();
+  const isWindowLevel = metricLevel === "window";
 
   // Queue of ML alerts waiting to be shown
   const queueRef = useRef<Alert[]>([]);
   const seenIdsRef = useRef<Set<string>>(new Set());
+  // Window-level: track seen IPs and window counts (src_ip → count)
+  const seenIpsRef = useRef<Map<string, number>>(new Map());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startedAtRef = useRef<number | null>(null);
 
   const [displayed, setDisplayed] = useState<Alert | null>(null);
+  const [displayedWindowCount, setDisplayedWindowCount] = useState<number>(1);
   const [phase, setPhase] = useState<"in" | "hold" | "out" | "hidden">("hidden");
   const [elapsed, setElapsed] = useState<string>("0.0");
 
@@ -58,11 +74,26 @@ export function AttackNarration({ alerts, replayPhase, replayStartedAt }: Props)
     alerts.forEach((a) => {
       if (!ML_ENGINES.has(a.engine)) return;
       if (a.ground_truth === "benign") return;
-      if (seenIdsRef.current.has(a.id)) return;
-      seenIdsRef.current.add(a.id);
-      queueRef.current.push(a);
+
+      if (isWindowLevel) {
+        // Deduplicate by src_ip — one narration per unique attacker IP
+        const key = a.src_ip;
+        const prevCount = seenIpsRef.current.get(key);
+        if (prevCount !== undefined) {
+          // IP already seen — just increment window count (don't re-queue)
+          seenIpsRef.current.set(key, prevCount + 1);
+        } else {
+          seenIpsRef.current.set(key, 1);
+          seenIdsRef.current.add(a.id);
+          queueRef.current.push(a);
+        }
+      } else {
+        if (seenIdsRef.current.has(a.id)) return;
+        seenIdsRef.current.add(a.id);
+        queueRef.current.push(a);
+      }
     });
-  }, [alerts, replayPhase]);
+  }, [alerts, replayPhase, isWindowLevel]);
 
   // Advance queue on a fixed cadence — never reset timer mid-display
   function showNext() {
@@ -79,6 +110,10 @@ export function AttackNarration({ alerts, replayPhase, replayStartedAt }: Props)
       : "0.0";
     setElapsed(elapsedSec);
     setDisplayed(next);
+    // For window-level, snapshot current window count for this IP
+    if (isWindowLevel) {
+      setDisplayedWindowCount(seenIpsRef.current.get(next.src_ip) ?? 1);
+    }
     setPhase("in");
 
     // After DISPLAY_MS, start fade-out
@@ -103,6 +138,7 @@ export function AttackNarration({ alerts, replayPhase, replayStartedAt }: Props)
       if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
       queueRef.current = [];
       seenIdsRef.current = new Set();
+      seenIpsRef.current = new Map();
       startedAtRef.current = null;
       setPhase("hidden");
       setDisplayed(null);
@@ -116,8 +152,12 @@ export function AttackNarration({ alerts, replayPhase, replayStartedAt }: Props)
 
   const color = ENGINE_COLOR[displayed.engine] ?? "#94a3b8";
   const label = ENGINE_LABEL[displayed.engine] ?? displayed.engine;
-  const narrationKey = NARRATION_KEY[displayed.engine] ?? "narration.community";
-  const message = t(narrationKey, { src: displayed.src_ip, dst: displayed.dst_ip });
+  const narrationKey = isWindowLevel
+    ? (NARRATION_WINDOW_KEY[displayed.engine] ?? NARRATION_KEY[displayed.engine] ?? "narration.community")
+    : (NARRATION_KEY[displayed.engine] ?? "narration.community");
+  const message = isWindowLevel
+    ? t(narrationKey, { src: displayed.src_ip, dst: displayed.dst_ip, windows: displayedWindowCount })
+    : t(narrationKey, { src: displayed.src_ip, dst: displayed.dst_ip });
   const detectedText = t("narration.detected", { elapsed });
   const scoreText = displayed.score !== null && displayed.score !== undefined
     ? `${t("narration.score")}: ${Number(displayed.score).toFixed(3)}`
@@ -144,10 +184,11 @@ export function AttackNarration({ alerts, replayPhase, replayStartedAt }: Props)
         key={displayed.id}
         className={`${animClass} flex items-center gap-3 px-6 py-2`}
         style={{
-          background: `linear-gradient(90deg, ${color}12 0%, rgba(10,12,15,0) 60%)`,
+          background: `linear-gradient(90deg, ${color}18 0%, rgba(10,12,15,0.97) 70%)`,
           borderBottom: `1px solid ${color}20`,
           borderLeft: `3px solid ${color}`,
           minHeight: "36px",
+          backdropFilter: "blur(4px)",
         }}
       >
         <span

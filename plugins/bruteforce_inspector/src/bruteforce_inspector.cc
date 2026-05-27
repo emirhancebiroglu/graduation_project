@@ -20,6 +20,23 @@ static const char* s_name = "bruteforce_inspector";
 static const char* s_help = "per-source-IP brute force detection via SYN aggregation";
 static const uint32_t BFC_GID = 307, BFC_SID = 1;
 
+static void write_score_file(uint32_t src_ip, float score, const char* engine,
+                             const double* feats, unsigned n_feats) {
+    static FILE* sf = nullptr;
+    if (!sf) sf = fopen("/tmp/aegis_scores.jsonl", "a");
+    if (!sf) return;
+    fprintf(sf, "{\"engine\":\"%s\",\"src_ip\":\"%u.%u.%u.%u\",\"score\":%.6f,\"features\":[",
+        engine,
+        (src_ip>>24)&0xFF,(src_ip>>16)&0xFF,(src_ip>>8)&0xFF,src_ip&0xFF,
+        score);
+    for (unsigned i = 0; i < n_feats; i++) {
+        if (i > 0) fprintf(sf, ",");
+        fprintf(sf, "%.6f", feats[i]);
+    }
+    fprintf(sf, "]}\n");
+    fflush(sf);
+}
+
 static inline uint32_t gsip(snort::Packet* p) {
     if (!p) return 0; auto* ip = p->ptrs.ip_api.get_src();
     return (ip && ip->is_ip4()) ? ntohl(ip->get_ip4_value()) : 0;
@@ -261,8 +278,9 @@ private:
             suppressed ? suppress_reason : "");
 
         if (alert && !suppressed) {
-            n_alert++; 
+            n_alert++;
             pr.last_alert_time = now;
+            write_score_file(pr.src_ip, score, "bruteforce", raw, 10);
             snort::DetectionEngine::queue_event(BFC_GID, BFC_SID);
             snort::LogMessage("[bfc] ALERT: %u.%u.%u.%u score=%.4f syns=%u ports=%zu\n",
                 (pr.src_ip>>24)&0xFF,(pr.src_ip>>16)&0xFF,(pr.src_ip>>8)&0xFF,pr.src_ip&0xFF,

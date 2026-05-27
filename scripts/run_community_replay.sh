@@ -1,95 +1,44 @@
 #!/bin/bash
-# run_community_replay.sh — CIC-IDS2017 PCAP'larını Community Rules ile çalıştır
-# Kullanım: cd ~/bitirme && bash scripts/run_community_replay.sh
+# run_community_replay.sh — Community rules baseline replay
+# Runs community config against specific PCAPs to check if community rules
+# detect the same attacks our ML models catch.
 set -e
+BASE_DIR=/home/emirhan/bitirme
+CONFIG=${BASE_DIR}/configs/snort_community.lua
+PCAP_DIR=${BASE_DIR}/pcaps
+RESULT_DIR=${BASE_DIR}/results/community
 
-# ─── Konfigürasyon ───
-SNORT_BIN="snort"
-SNORT_ETC="/usr/local/etc/snort"
-CONFIG="$HOME/bitirme/configs/snort_community.lua"
-PCAP_DIR="$HOME/bitirme/pcaps"
-OUTPUT_DIR="$HOME/bitirme/results/community"
-
-# ─── PCAP dosyaları ───
-PCAP_FILES=(
-    "Wednesday-workingHours.pcap"
+declare -A DAY_MAP=(
+    ["Tuesday"]="Tuesday-WorkingHours.pcap"
+    ["Wednesday"]="Wednesday-workingHours.pcap"
+    ["Friday"]="Friday-WorkingHours.pcap"
 )
 
-echo "============================================="
-echo " Community Rules — CIC-IDS2017 PCAP Replay"
-echo "============================================="
-echo "Config:      $CONFIG"
-echo "PCAP dizini: $PCAP_DIR"
-echo "Çıktı:       $OUTPUT_DIR"
+echo "=== Community Rules Baseline ==="
+echo "Config: ${CONFIG}"
 echo ""
 
-TOTAL=${#PCAP_FILES[@]}
-CURRENT=0
+for day in Tuesday Wednesday Friday; do
+    pcap="${DAY_MAP[$day]}"
+    outdir="${RESULT_DIR}/${day}"
+    mkdir -p "$outdir"
+    rm -f "$outdir/alert_csv.txt" "$outdir/snort_output.log"
 
-for pcap in "${PCAP_FILES[@]}"; do
-    CURRENT=$((CURRENT + 1))
-    PCAP_PATH="$PCAP_DIR/$pcap"
-    BASE_NAME="${pcap%.pcap}"
-    ALERT_DIR="$OUTPUT_DIR/$BASE_NAME"
-
-    echo "─────────────────────────────────────────────"
-    echo "[$CURRENT/$TOTAL] $pcap"
-    echo "─────────────────────────────────────────────"
-
-    if [ ! -f "$PCAP_PATH" ]; then
-        echo "  UYARI: $PCAP_PATH bulunamadı, atlaniyor!"
-        continue
-    fi
-
-    mkdir -p "$ALERT_DIR"
-
-    echo "  Başlatılıyor..."
-    START_TIME=$(date +%s)
-
-    # NOT: --plugin-path yok — community rules plugin gerektirmez
-    cd "$SNORT_ETC" && $SNORT_BIN \
-        -c "$CONFIG" \
-        -r "$PCAP_PATH" \
+    echo "[${day}] Replaying ${pcap}..."
+    cd /usr/local/etc/snort
+    snort -c "$CONFIG" \
+        -r "${PCAP_DIR}/${pcap}" \
         -A alert_csv \
-        -l "$ALERT_DIR" \
-        --warn-all \
-        -q \
-        2>/dev/null
+        -l "$outdir" \
+        > "$outdir/snort_output.log" 2>&1
 
-    END_TIME=$(date +%s)
-    ELAPSED=$((END_TIME - START_TIME))
+    alert_count=$(wc -l < "$outdir/alert_csv.txt" 2>/dev/null || echo 0)
+    echo "  Alert CSV rows: ${alert_count}"
 
-    ALERT_FILE="$ALERT_DIR/alert_csv.txt"
-    if [ -f "$ALERT_FILE" ]; then
-        ALERT_COUNT=$(wc -l < "$ALERT_FILE")
-        echo "  Tamamlandı: $ALERT_COUNT alert, süre: ${ELAPSED}s"
-    else
-        echo "  Tamamlandı: 0 alert, süre: ${ELAPSED}s"
-    fi
+    # Count unique alerted IPs (for IP-level comparison)
+    unique_ips=$(grep -oP '\d+\.\d+\.\d+\.\d+' "$outdir/alert_csv.txt" 2>/dev/null | sort -u | wc -l || echo 0)
+    echo "  Unique alerted IPs: ${unique_ips}"
     echo ""
 done
 
-echo "============================================="
-echo " Tüm PCAP'lar işlendi!"
-echo "============================================="
-echo ""
-echo "ÖZET:"
-echo "─────────────────────────────────────────────"
-printf "%-45s %s\n" "PCAP Dosyası" "Alert Sayısı"
-echo "─────────────────────────────────────────────"
-
-TOTAL_ALERTS=0
-for pcap in "${PCAP_FILES[@]}"; do
-    BASE_NAME="${pcap%.pcap}"
-    ALERT_FILE="$OUTPUT_DIR/$BASE_NAME/alert_csv.txt"
-    if [ -f "$ALERT_FILE" ]; then
-        COUNT=$(wc -l < "$ALERT_FILE")
-    else
-        COUNT=0
-    fi
-    TOTAL_ALERTS=$((TOTAL_ALERTS + COUNT))
-    printf "%-45s %d\n" "$pcap" "$COUNT"
-done
-echo "─────────────────────────────────────────────"
-printf "%-45s %d\n" "TOPLAM" "$TOTAL_ALERTS"
-echo "─────────────────────────────────────────────"
+echo "=== Done ==="

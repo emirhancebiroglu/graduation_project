@@ -18,6 +18,23 @@
 #include "scaler_loader.h"
 
 static const char* s_name = "portscan_inspector";
+
+static void write_score_file(uint32_t src_ip, float score, const char* engine,
+                             const double* feats, unsigned n_feats) {
+    static FILE* sf = nullptr;
+    if (!sf) sf = fopen("/tmp/aegis_scores.jsonl", "a");
+    if (!sf) return;
+    fprintf(sf, "{\"engine\":\"%s\",\"src_ip\":\"%u.%u.%u.%u\",\"score\":%.6f,\"features\":[",
+        engine,
+        (src_ip>>24)&0xFF,(src_ip>>16)&0xFF,(src_ip>>8)&0xFF,src_ip&0xFF,
+        score);
+    for (unsigned i = 0; i < n_feats; i++) {
+        if (i > 0) fprintf(sf, ",");
+        fprintf(sf, "%.6f", feats[i]);
+    }
+    fprintf(sf, "]}\n");
+    fflush(sf);
+}
 static const char* s_help = "SYN ML + NULL/XMAS heuristic port scan detection";
 static const uint32_t PSI_GID = 302, PSI_SID = 1;
 
@@ -110,9 +127,33 @@ public:
         uint32_t dst = gdip(p);
         if (src == 0) return;
 
-        // Check window expiry for any packet from tracked src (not just SYN/FNX).
-        // Without this, a scanner that stops sending SYNs just before window_sec
-        // would never trigger inference even if non-SYN packets arrive after expiry.
+        // Emit deferred alert on the attacker's own packet (correct src in alert_csv).
+        {
+            auto it = profs.find(src);
+            if (it != profs.end() && it->second.alert_pending) {
+                auto& pp = it->second;
+                pp.alert_pending = false;
+                alert++;
+                snort::DetectionEngine::queue_event(PSI_GID, PSI_SID);
+                snort::LogMessage("[portscan] ALERT (deferred): %u.%u.%u.%u score=%.4f\n",
+                    (pp.src_ip>>24)&0xFF,(pp.src_ip>>16)&0xFF,(pp.src_ip>>8)&0xFF,pp.src_ip&0xFF,
+                    pp.pending_score);
+            }
+        }
+
+        // Periodic sweep: run inference on expired windows, mark alert_pending.
+        {
+            static uint32_t sweep = 0;
+            if (++sweep % 1000 == 0) {
+                for (auto& kv : profs) {
+                    auto& pp = kv.second;
+                    if (!pp.inference_done && pp.syn_count >= mn && pp.is_window_expired(now, ws))
+                        infer_deferred(pp, now);
+                }
+            }
+        }
+
+        // Check window expiry for any packet from tracked src.
         {
             auto it = profs.find(src);
             if (it != profs.end()) {
@@ -128,9 +169,7 @@ public:
         uint8_t ptype = 0; uint16_t sp = 0, dp = 0;
         if (p->ptrs.tcph) {
             uint8_t f = p->ptrs.tcph->th_flags;
-            // SYN-only (SYN=1, ACK=0, RST=0)
             if ((f & 0x16) == 0x02) { ptype = 'S'; sp=p->ptrs.tcph->src_port(); dp=p->ptrs.tcph->dst_port(); }
-            // FIN/NULL/XMAS: flags but not SYN/RST/ACK, or no flags at all
             else if ((!(f & 0x16) && (f & 0x29)) || f == 0) { ptype = 'F'; }
         }
         if (!ptype) return;
@@ -147,9 +186,11 @@ public:
             pr.add_syn(dst, dp, sp);
             if (!pr.inference_done && pr.syn_count >= mn && pr.is_window_expired(now, ws))
                 infer(pr, now);
+            // Early-fire for high-volume scanners — no need to wait for window expiry.
+            if (!pr.inference_done && pr.syn_count >= 500 && pr.syn_dst_ports.size() >= static_cast<size_t>(mdp))
+                infer(pr, now);
         } else {
             pr.add_fnx();
-            // NULL/XMAS heuristic: fire immediately if FNX with no SYNs
             if (!pr.inference_done && pr.is_null_xmas()) {
                 pr.inference_done = true; inf++;
                 snort::LogMessage("[portscan] %u.%u.%u.%u syn=%u fnx=%u score=0.999 [null/xmas]\n",
@@ -167,6 +208,29 @@ private:
     Xgb xgb;
     std::unordered_map<uint32_t, PsiAggProfile> profs;
     static std::atomic<uint64_t> inf, alert;
+
+    void infer_deferred(PsiAggProfile& pr, double now) {
+        if (pr.syn_dst_ports.size() < mdp) { pr.inference_done = true; return; }
+        double raw[7], proc[7];
+        pr.compute_features(raw, ws);
+        memcpy(proc, raw, sizeof(raw));
+        PsiAggProfile::preprocess(proc, g_scaler);
+        float f[7]; for (unsigned i=0;i<7;i++) f[i] = proc[i];
+        float score = 0; if (xgb.ok()) xgb.run(f, score);
+        pr.inference_done = true; inf++;
+        snort::LogMessage("[portscan] %u.%u.%u.%u syn=%u/%zu fnx=%u score=%.4f\n",
+            (pr.src_ip>>24)&0xFF,(pr.src_ip>>16)&0xFF,(pr.src_ip>>8)&0xFF,pr.src_ip&0xFF,
+            pr.syn_count, pr.syn_dst_ports.size(), pr.fnx_count, score);
+        bool ip_sweep = (pr.syn_dst_ips.size() >= 100 && pr.syn_count >= 500);
+        if (score > thr || ip_sweep) {
+            float report_score = ip_sweep ? 0.990f : score;
+            write_score_file(pr.src_ip, report_score, "portscan", raw, 7);
+            pr.alert_pending = true;
+            pr.pending_score = report_score;
+            snort::LogMessage("[portscan] ALERT pending: %u.%u.%u.%u score=%.4f\n",
+                (pr.src_ip>>24)&0xFF,(pr.src_ip>>16)&0xFF,(pr.src_ip>>8)&0xFF,pr.src_ip&0xFF, report_score);
+        }
+    }
 
     void infer(PsiAggProfile& pr, double now) {
         // Skip ML if too few unique dst ports (avoids FP on normal heavy traffic)
@@ -196,6 +260,7 @@ private:
         bool ip_sweep = (pr.syn_dst_ips.size() >= 100 && pr.syn_count >= 500);
         if (score > thr || ip_sweep) {
             float report_score = ip_sweep ? 0.990f : score;
+            write_score_file(pr.src_ip, report_score, "portscan", raw, 7);
             alert++; snort::DetectionEngine::queue_event(PSI_GID, PSI_SID);
             snort::LogMessage("[portscan] ALERT: %u.%u.%u.%u score=%.4f%s\n",
                 (pr.src_ip>>24)&0xFF,(pr.src_ip>>16)&0xFF,(pr.src_ip>>8)&0xFF,pr.src_ip&0xFF,

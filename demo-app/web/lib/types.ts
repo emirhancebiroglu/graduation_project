@@ -1,5 +1,68 @@
-export type Engine = "xgboost" | "community" | "portscan" | "dos_agg" | "bot" | "bruteforce";
+export type Engine = "xgboost" | "community" | "portscan" | "dos_agg" | "ddos" | "bot" | "bruteforce";
 export type CoreEngine = "xgboost" | "community";
+
+export type ScenarioKey = "dos" | "ddos" | "portscan" | "bruteforce" | "bot";
+export type MetricLevel = "flow" | "window";
+
+export type ScenarioConfusion = {
+  TP?: number | null;
+  FP?: number | null;
+  FN?: number | null;
+  TN?: number | null;
+  TP_windows?: number | null;
+  FP_windows?: number | null;
+  FN_windows?: number | null;
+  TN_windows?: number | null;
+};
+
+export type ScenarioMlBlock = {
+  alerts: number;
+  confusion: ScenarioConfusion;
+  accuracy?: number | null;
+  precision?: number | null;
+  recall?: number | null;
+  f1?: number | null;
+  fpr?: number | null;
+  avg_score?: number | null;
+  attacker_ips_detected?: string | null;
+  window_recall?: number | null;
+  syn_coverage?: number | null;
+  target?: string | null;
+  dedup_seconds?: number | null;
+  attacker_ip_list?: string[] | null;
+  windows_per_ip_range?: string | null;
+  score_range?: number[] | null;
+};
+
+export type ScenarioCommunityBlock = {
+  alerts_total_day: number;
+  alerts_on_attackers: number;
+  fpr: number;
+  confusion?: ScenarioConfusion | null;
+};
+
+export type ScenarioDisplay = {
+  title_key: string;
+  attack_label: string;
+  dataset_label: string;
+  generalization_chip: string;
+};
+
+export type ScenarioPayload = {
+  key: ScenarioKey;
+  pcap_name: string;
+  active_engine: Engine;
+  metric_level: MetricLevel;
+  gt_loader_day: string;
+  ml: ScenarioMlBlock;
+  community: ScenarioCommunityBlock;
+  display: ScenarioDisplay;
+};
+
+export type ScenariosListResponse = {
+  scenarios: ScenarioPayload[];
+  default: ScenarioKey;
+};
 
 export type Alert = {
   id: string;
@@ -85,4 +148,5 @@ export type WsMessage =
   | { type: "status"; data: WsStatusData }
   | { type: "comparison"; data: ComparisonSnapshot }
   | { type: "alert_counts"; data: AlertCounts }
-  | { type: "evaluation"; data: EvaluationResult };
+  | { type: "evaluation"; data: EvaluationResult }
+  | { type: "alerts_updated"; data: Alert[] };

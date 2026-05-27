@@ -8,20 +8,21 @@ import { ImpactSummary } from "@/components/impact-summary";
 import { DetectionCoverage } from "@/components/detection-coverage";
 import { ArcxIntegration } from "@/components/arcx-integration";
 import { AttackNarration } from "@/components/attack-narration";
-import { MitreMap } from "@/components/mitre-map";
 import { ThreatBriefing } from "@/components/threat-briefing";
 import { LanguageToggle } from "@/components/language-toggle";
+import { ScenarioPicker } from "@/components/scenario-picker";
 import { useT } from "@/lib/i18n";
 import { toast } from "sonner";
-import type { Engine, Alert } from "@/lib/types";
+import type { Engine, Alert, ScenarioKey, ScenarioPayload } from "@/lib/types";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const SCENARIO_STORAGE_KEY = "aegis.scenario";
 
-async function startReplay(): Promise<void> {
+async function startReplay(scenario: ScenarioKey): Promise<void> {
   const res = await fetch(`${API}/api/replay/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pcap: "full_wednesday" }),
+    body: JSON.stringify({ scenario }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -44,31 +45,71 @@ export default function Page() {
   const { t } = useT();
   const stream = useIdsStream();
   const [isStarting, setIsStarting] = useState(false);
-  const { connected, snortRunning, pcapProgress, replayPhase, evaluation, alerts, engineAlerts, markStarted } = stream;
+  const { connected, snortRunning, pcapProgress, replayPhase, evaluation, alerts, engineAlerts, markStarted, resetToIdle } = stream;
   const [feedAlerts, setFeedAlerts] = useState(alerts);
   const [feedEngineAlerts, setFeedEngineAlerts] = useState<Record<Engine, Alert[]>>(engineAlerts);
   const [frozenMetrics, setFrozenMetrics] = useState<FrozenMetrics | null>(null);
   const [replayStartedAt, setReplayStartedAt] = useState<number | null>(null);
+  const [scenarios, setScenarios] = useState<ScenarioPayload[]>([]);
+  const [activeScenario, setActiveScenarioState] = useState<ScenarioKey>("dos");
+  const [scenarioPayload, setScenarioPayload] = useState<ScenarioPayload | null>(null);
+  const [overlayDismissed, setOverlayDismissed] = useState(false);
+
+  function setActiveScenario(key: ScenarioKey) {
+    setActiveScenarioState(key);
+    try {
+      window.localStorage.setItem(SCENARIO_STORAGE_KEY, key);
+    } catch {
+      /* ignore */
+    }
+    // After replay completes, switching scenario resets to idle so user can start fresh
+    if (replayPhase === "complete") {
+      resetToIdle();
+    }
+  }
 
   // On mount: stop any in-progress replay so UI always starts clean
   useEffect(() => {
     fetch(`${API}/api/replay/stop`, { method: "POST" }).catch(() => {});
   }, []);
 
+  // Load scenarios list + active selection from localStorage
   useEffect(() => {
-    fetch("/api/config")
+    fetch(`${API}/api/config/scenarios`)
       .then((r) => r.json())
-      .then((cfg) => {
-        setFrozenMetrics({
-          xgb_FP: cfg.metrics?.FP ?? 7393,
-          community_FP: cfg.community_baseline?.FP ?? 36633,
-          fp_gap: cfg.community_baseline?.fp_gap ?? 29240,
-        });
+      .then((data: { scenarios: ScenarioPayload[]; default: ScenarioKey }) => {
+        setScenarios(data.scenarios);
+        let initial: ScenarioKey = data.default;
+        try {
+          const stored = window.localStorage.getItem(SCENARIO_STORAGE_KEY);
+          if (stored && data.scenarios.some((s) => s.key === stored)) {
+            initial = stored as ScenarioKey;
+          }
+        } catch {
+          /* ignore */
+        }
+        setActiveScenarioState(initial);
       })
       .catch(() => {
-        setFrozenMetrics({ xgb_FP: 7393, community_FP: 36633, fp_gap: 29240 });
+        /* leave scenarios empty; picker hides itself */
       });
   }, []);
+
+  // Whenever active scenario changes, fetch its frozen metrics
+  useEffect(() => {
+    if (scenarios.length === 0) return;
+    const payload = scenarios.find((s) => s.key === activeScenario) ?? null;
+    setScenarioPayload(payload);
+    if (payload) {
+      const xgbFp = payload.ml.confusion.FP ?? payload.ml.alerts;
+      const commFp = payload.community.confusion?.FP ?? payload.community.alerts_total_day;
+      setFrozenMetrics({
+        xgb_FP: xgbFp,
+        community_FP: commFp,
+        fp_gap: Math.max(commFp - xgbFp, 0),
+      });
+    }
+  }, [activeScenario, scenarios]);
 
   // Debounced sync — batch UI updates at ~150ms, pass stream arrays directly
   const throttleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -98,11 +139,12 @@ export default function Page() {
 
   async function handleStart() {
     markStarted();
+    setOverlayDismissed(true);
     setReplayLoading("start");
     setIsStarting(true);
     try {
-      await startReplay();
-      toast.success(t("toast.started"));
+      await startReplay(activeScenario);
+      toast.success(t(`toast.started.${activeScenario}`));
     } catch (err) {
       setIsStarting(false);
       toast.error(t("toast.startFail", { err: err instanceof Error ? err.message : String(err) }));
@@ -131,6 +173,24 @@ export default function Page() {
   }, [snortRunning, isStarting]);
 
   const effectiveRunning = snortRunning || isStarting;
+
+  // Filter alerts to the active scenario's engine + community. Other inspectors
+  // can cross-fire on the slice (e.g. portscan inspector on the DoS PCAP); we
+  // hide that noise from the feed so the user focuses on the chosen scenario.
+  const activeEngine: Engine | null = scenarioPayload?.active_engine ?? null;
+  const filteredAlerts = useMemo<Alert[]>(() => {
+    if (!activeEngine) return feedAlerts;
+    return feedAlerts.filter((a) => a.engine === activeEngine || a.engine === "community");
+  }, [feedAlerts, activeEngine]);
+  const filteredEngineAlerts = useMemo<Record<Engine, Alert[]>>(() => {
+    if (!activeEngine) return feedEngineAlerts;
+    const empty: Record<Engine, Alert[]> = {
+      xgboost: [], community: [], portscan: [], dos_agg: [], ddos: [], bot: [], bruteforce: [],
+    };
+    empty[activeEngine] = feedEngineAlerts[activeEngine] ?? [];
+    empty.community = feedEngineAlerts.community ?? [];
+    return empty;
+  }, [feedEngineAlerts, activeEngine]);
 
   // chartMetrics — DISABLED (TrafficChart disconnected)
   /*
@@ -350,17 +410,29 @@ export default function Page() {
         </div>
       )}
 
-      {/* ── ATTACK NARRATION ── */}
-      <AttackNarration alerts={feedAlerts} replayPhase={replayPhase} replayStartedAt={replayStartedAt} />
+      {/* ── ATTACK NARRATION — sticky below header, always visible while scrolling ── */}
+      <div style={{ position: "sticky", top: 0, zIndex: 40 }}>
+        <AttackNarration alerts={filteredAlerts} replayPhase={replayPhase} replayStartedAt={replayStartedAt} metricLevel={scenarioPayload?.metric_level} />
+      </div>
 
       {/* ── MAIN CONTENT ── */}
       <div className="flex-1 p-5 flex flex-col gap-4">
 
+        {/* Scenario picker — only shows when scenarios loaded */}
+        {scenarios.length > 0 && (
+          <ScenarioPicker
+            scenarios={scenarios}
+            activeScenario={activeScenario}
+            onSelect={setActiveScenario}
+            replayPhase={replayPhase}
+          />
+        )}
+
         {/* ROI / Impact — hero section, most prominent */}
-        <ImpactSummary evaluation={evaluation} replayPhase={replayPhase} pcapProgress={pcapProgress} frozenMetrics={frozenMetrics} />
+        <ImpactSummary evaluation={evaluation} replayPhase={replayPhase} pcapProgress={pcapProgress} frozenMetrics={frozenMetrics} scenario={scenarioPayload} />
 
         {/* Performance Metrics */}
-        <EvaluationReport evaluation={evaluation} />
+        <EvaluationReport evaluation={evaluation} scenario={scenarioPayload} />
 
         {/* Detection Timeline — DISABLED (not working correctly) */}
         {/*
@@ -376,7 +448,7 @@ export default function Page() {
         */}
 
         {/* Alert Feed — live alerts with IF anomaly tags + SHAP explain */}
-        {(feedAlerts.length > 0 || replayPhase === "running" || replayPhase === "draining") && (
+        {(filteredAlerts.length > 0 || replayPhase === "running" || replayPhase === "draining") && (
           <div
             className="relative"
             style={{
@@ -396,17 +468,19 @@ export default function Page() {
                 {replayPhase === "draining" ? t("alertFeedSection.finalizing") : t("alertFeedSection.live")}
               </span>
               <span className="section-label ml-2 text-[9px]" style={{ color: "rgba(0,212,255,0.65)" }}>
-                {feedAlerts.length} {t("alertFeedSection.countSuffix")}
+                {filteredAlerts.length} {t("alertFeedSection.countSuffix")}
               </span>
             </div>
             <div className="flex-1 overflow-hidden p-3">
               <AlertFeed
-                alerts={feedAlerts}
-                engineAlerts={feedEngineAlerts}
+                alerts={filteredAlerts}
+                engineAlerts={filteredEngineAlerts}
                 replayPhase={replayPhase}
+                activeEngine={activeEngine ?? "xgboost"}
+                metricLevel={scenarioPayload?.metric_level}
                 onClear={() => {
                   setFeedAlerts([]);
-                  setFeedEngineAlerts({ xgboost: [], community: [], portscan: [], dos_agg: [], bot: [], bruteforce: [] });
+                  setFeedEngineAlerts({ xgboost: [], community: [], portscan: [], dos_agg: [], ddos: [], bot: [], bruteforce: [] });
                 }}
               />
             </div>
@@ -427,13 +501,17 @@ export default function Page() {
       </footer>
 
       {/* Fixed right-rail coverage drawer */}
-      <DetectionCoverage />
+      <DetectionCoverage scenario={scenarioPayload} />
       {/* Fixed left-rail ARCX integration drawer */}
-      <ArcxIntegration alerts={feedAlerts} />
-      {/* Bottom MITRE ATT&CK map */}
-      <MitreMap alerts={feedAlerts} />
-      {/* Fullscreen idle overlay — threat statistics */}
-      <ThreatBriefing replayPhase={replayPhase} />
+      <ArcxIntegration alerts={filteredAlerts} replayPhase={replayPhase} />
+      {!overlayDismissed && (
+        <ThreatBriefing
+          replayPhase={replayPhase}
+          scenarios={scenarios}
+          activeScenario={activeScenario}
+          onSelectScenario={setActiveScenario}
+        />
+      )}
     </main>
   );
 }

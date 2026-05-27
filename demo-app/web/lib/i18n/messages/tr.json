@@ -24,6 +24,22 @@
   "footer": {
     "tag": "AEGIS IDS // CIC-IDS2017 WEDNESDAY // ML TOPLULUĞU + COMMUNITY KURALLARI"
   },
+  "detectionSummary": {
+    "title": "TESPİT ÖZETİ",
+    "attackerIpsDetected": "TESPİT EDİLEN SALDIRGAN IP",
+    "alertWindows": "ALARM PENCERELERİ",
+    "falsePositiveWindows": "YANLIŞ POZİTİF PENCERE",
+    "falseNegativeWindows": "YANLIŞ NEGATİF PENCERE",
+    "avgScore": "ORT. SKOR",
+    "communityBaseline": "COMMUNITY TEMEL",
+    "fpIps": "YANLIŞ POZİTİF IP",
+    "fpr": "YPO",
+    "totalFlowAlerts": "TOPLAM AKIŞ ALARMI",
+    "windowRecall": "PENCERE DUYARLILIK",
+    "synCoverage": "SYN KAPSAMI",
+    "windowCount": "{count} pencere",
+    "scoreRange": "SKOR ARALIĞI"
+  },
   "roi": {
     "titleIdle": "İŞ ETKİSİ ANALİZİ",
     "titleLive": "İŞ ETKİSİ — CANLI",
@@ -33,13 +49,16 @@
     "hoursSuffix": "saat",
     "equivalentDays": "~{days} iş gününe eşdeğer (3 dk/alarm, 8 sa/gün varsayımı)",
     "falseAlarmComparison": "YANLIŞ ALARM KARŞILAŞTIRMASI",
+    "alertVolumeComparison": "ALARM TRİAJ HACMİ",
     "mlEnsemble": "ML Topluluğu",
     "community": "Community",
     "fewerFalseAlarms": "−{count} daha az yanlış alarm (%{pct} azalma)",
+    "fewerAlertsToTriage": "−{count} daha az alarm incelenmesi (%{pct} azalma)",
     "xgbAccuracy": "XGB DOĞRULUK",
     "xgbRecall": "XGB DUYARLILIK",
     "tlSavings": "≈ ₺{amount}/yıl analist maliyeti tasarrufu",
-    "tlRate": "₺280/saat SOC analist oranı baz alınarak"
+    "tlRate": "₺280/saat SOC analist oranı baz alınarak",
+    "reductionMultiplier": "≈ {x}× daha az alarm incelemesi"
   },
   "evaluation": {
     "title": "PERFORMANS METRİKLERİ — WEDNESDAY CIC-IDS2017",
@@ -56,7 +75,8 @@
     "tie": "EŞİT",
     "win": "ÖNDE",
     "awaiting": "ANALİZ BEKLENİYOR...",
-    "flowsEvaluated": "{count} AKIŞ DEĞERLENDİRİLDİ · GERÇEK ETİKETLER"
+    "flowsEvaluated": "{count} AKIŞ DEĞERLENDİRİLDİ · GERÇEK ETİKETLER",
+    "frozenBaseline": "{dataset} · DONMUŞ TEMEL · GÜN BAZLI GERÇEK ETİKETLER"
   },
   "alerts": {
     "filterAll": "TÜMÜ",
@@ -193,7 +213,11 @@
     "dos_agg": "DDoS koordinasyonu tespit edildi — kaynak: {src}",
     "community": "Snort3 imza eşleşmesi: {src} → {dst}",
     "detected": "Aegis {elapsed}s içinde tespit etti",
-    "score": "Skor"
+    "score": "Skor",
+    "dos_agg_window": "DDoS koordinasyonu — {src} ({windows} alarm penceresi)",
+    "portscan_window": "{src} port tarama tespit edildi ({windows} pencere)",
+    "bot_window": "{src} botnet C2 sinyali ({windows} pencere)",
+    "bruteforce_window": "{src} kaba kuvvet saldırısı ({windows} pencere)"
   },
   "arcx": {
     "buttonLabel": "ENTEGRASYON",
@@ -213,12 +237,19 @@
     "mod4Badge": "AEGİS IDS",
     "liveAlerts": "CANLI AEGİS ALARMLARI → ARCX",
     "noAlerts": "Alarm bekleniyor… analizi başlatın",
+    "waiting": "ML tespiti bekleniyor…",
     "flowLabel": "AEGİS → ARCX",
     "footerLeft": "REST API · WebHook · Syslog entegrasyon desteği",
     "footerRight": "OEM / White-label hazır"
   },
   "toast": {
-    "started": "Wednesday yeniden oynatma başlatıldı",
+    "started": {
+      "dos": "DoS senaryosu başlatıldı",
+      "ddos": "DDoS senaryosu başlatıldı",
+      "portscan": "Port Tarama senaryosu başlatıldı",
+      "bruteforce": "Kaba Kuvvet senaryosu başlatıldı",
+      "bot": "Bot İstemci senaryosu başlatıldı"
+    },
     "stopped": "Yeniden oynatma durduruldu",
     "startFail": "Başlatma başarısız: {err}",
     "stopFail": "Durdurma başarısız: {err}"
@@ -227,5 +258,40 @@
     "label": "DİL",
     "tr": "TR",
     "en": "EN"
+  },
+  "scenarios": {
+    "title": "SALDIRI SENARYOSU",
+    "subtitle": "Senaryoyu seçin — ilgili dilimli PCAP ve sabit metrikler yüklenir",
+    "disabledHint": "değiştirmek için replay'i durdurun",
+    "dos": {
+      "title": "DoS",
+      "description": "Hulk, GoldenEye, Slowloris ve Slowhttptest selleri. Akış-bazlı XGBoost.",
+      "modelLine": "XGBoost · akış-bazlı · 15 özellik",
+      "generalizationChip": "UNSW Recall ≥ 0.81 · Wed FPR 1.68%"
+    },
+    "ddos": {
+      "title": "DDoS",
+      "description": "Web sunucusuna LOIT HTTP seli. IP-pencere bazlı toplayıcı.",
+      "modelLine": "DoS Toplayıcı · IP-pencere · GID:303",
+      "generalizationChip": "Wed + Fri: Recall 1.0 · 0 FP"
+    },
+    "portscan": {
+      "title": "Port Tarama",
+      "description": "Alt ağa TCP SYN taraması. Pencere bazlı toplayıcı.",
+      "modelLine": "PortScan Dedektörü · 60sn pencere · 7 özellik",
+      "generalizationChip": "Cupid 2/2 BAŞARILI"
+    },
+    "bruteforce": {
+      "title": "Kaba Kuvvet",
+      "description": "SSH-Patator + FTP-Patator kimlik bilgisi denemeleri.",
+      "modelLine": "BruteForce LSTM · 120sn pencere · GID:307",
+      "generalizationChip": "10/10 sentetik araç (Patator, Hydra, Medusa…)"
+    },
+    "bot": {
+      "title": "Bot İstemci",
+      "description": "7 makine ARES C2 sinyali atıyor. Çapraz-akış dedektör.",
+      "modelLine": "Bot Client · 300sn pencere · 22 özellik",
+      "generalizationChip": "MTA Xworm C2 @ 0.874"
+    }
   }
 }

@@ -33,13 +33,15 @@ struct PsiAggProfile {
     uint32_t fnx_count;    // FIN/NULL/XMAS packets seen (for heuristic)
 
     bool inference_done;
+    bool alert_pending;
+    float pending_score;
 
     void reset(uint32_t ip, double ts) {
         src_ip = ip; window_start_ts = ts;
         syn_count = 0; syn_dst_ports.clear(); syn_port_counts.clear(); syn_dst_ips.clear();
         min_src_port = 0; max_src_port = 0; src_port_init = false;
         fnx_count = 0;
-        inference_done = false;
+        inference_done = false; alert_pending = false; pending_score = 0.f;
     }
 
     void add_syn(uint32_t dip, uint16_t dport, uint16_t sport) {

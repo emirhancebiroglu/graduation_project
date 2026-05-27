@@ -7,16 +7,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { Alert, Engine, CoreEngine, ShapContribution, ReplayPhase } from "@/lib/types";
+import type { Alert, Engine, CoreEngine, MetricLevel, ShapContribution, ReplayPhase } from "@/lib/types";
 import { useT } from "@/lib/i18n";
 
-type Filter = "all" | "xgboost" | "community";
+type Filter = "all" | "ml" | "community";
 
 type Props = {
   alerts: Alert[];
   engineAlerts: Record<CoreEngine, Alert[]>;
   replayPhase: ReplayPhase;
   onClear: () => void;
+  activeEngine?: Engine;
+  metricLevel?: MetricLevel;
 };
 
 type Severity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
@@ -192,12 +194,27 @@ function IfBadge({ ifLabel }: { ifLabel: string | null | undefined }): React.Rea
 
 const FILTER_KEYS: { key: "filterAll" | "filterXgboost" | "filterCommunity"; value: Filter }[] = [
   { key: "filterAll", value: "all" },
-  { key: "filterXgboost", value: "xgboost" },
+  { key: "filterXgboost", value: "ml" },
   { key: "filterCommunity", value: "community" },
 ];
 
-export function AlertFeed({ alerts, engineAlerts, replayPhase, onClear }: Props) {
+// Group ML alerts by src_ip for window-level scenarios: one representative row + window count badge
+function groupByIp(alerts: Alert[]): (Alert & { _windowCount: number })[] {
+  const map = new Map<string, Alert & { _windowCount: number }>();
+  for (const a of alerts) {
+    const existing = map.get(a.src_ip);
+    if (existing) {
+      existing._windowCount += 1;
+    } else {
+      map.set(a.src_ip, { ...a, _windowCount: 1 });
+    }
+  }
+  return Array.from(map.values());
+}
+
+export function AlertFeed({ alerts, engineAlerts, replayPhase, onClear, activeEngine = "xgboost", metricLevel }: Props) {
   const { t } = useT();
+  const isWindowLevel = metricLevel === "window";
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState<Alert | null>(null);
   const [userScrolled, setUserScrolled] = useState(false);
@@ -238,10 +255,19 @@ export function AlertFeed({ alerts, engineAlerts, replayPhase, onClear }: Props)
     setShapLoading(false);
   }
 
-  const filtered =
+  const rawFiltered: Alert[] =
     filter === "all"
       ? alerts
-      : engineAlerts[filter as CoreEngine];
+      : filter === "ml"
+        ? (engineAlerts[activeEngine as CoreEngine] ?? [])
+        : engineAlerts["community"];
+
+  // For window-level scenarios, group ML engine rows by src_ip to reduce noise.
+  // Community alerts remain ungrouped (flow-level, expected to be high-volume).
+  const grouped = isWindowLevel && filter === "ml"
+    ? groupByIp(rawFiltered)
+    : rawFiltered as (Alert & { _windowCount: number })[];
+  const filtered = grouped;
 
   const displayed = filtered.slice(0, 200);
 
@@ -329,6 +355,7 @@ export function AlertFeed({ alerts, engineAlerts, replayPhase, onClear }: Props)
         <div className="space-y-px">
           {displayed.map((a) => {
             const color = rowColor(a);
+            const windowCount = (a as Alert & { _windowCount?: number })._windowCount;
             return (
               <div
                 key={a.id}
@@ -360,6 +387,14 @@ export function AlertFeed({ alerts, engineAlerts, replayPhase, onClear }: Props)
                 <span className="flex items-center gap-1.5 min-w-0">
                   <AttackTypeBadge alert={a} />
                   {mitreBadge(a.mitre_technique)}
+                  {windowCount && windowCount > 1 && (
+                    <span
+                      className="text-[8px] font-mono px-1 py-0.5 shrink-0"
+                      style={{ border: `1px solid ${color}40`, background: `${color}12`, color }}
+                    >
+                      {t("detectionSummary.windowCount", { count: windowCount })}
+                    </span>
+                  )}
                   <span className="text-[10px] font-mono truncate" style={{ color: "rgba(148,163,184,0.85)" }}>{a.msg}</span>
                 </span>
               </div>
@@ -390,8 +425,8 @@ export function AlertFeed({ alerts, engineAlerts, replayPhase, onClear }: Props)
 
       {/* Detail dialog */}
       <Dialog open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
-        <DialogContent className="max-w-lg" style={{ background: "#0f1318", border: "1px solid rgba(0,212,255,0.2)" }}>
-          <DialogHeader>
+        <DialogContent className="max-w-lg flex flex-col" style={{ background: "#0f1318", border: "1px solid rgba(0,212,255,0.2)", maxHeight: "90vh" }}>
+          <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2 font-mono text-sm" style={{ color: "#e2e8f0" }}>
               {t("alerts.dialog.title")}
               {selected && (
@@ -403,7 +438,7 @@ export function AlertFeed({ alerts, engineAlerts, replayPhase, onClear }: Props)
             </DialogTitle>
           </DialogHeader>
           {selected && (
-            <div className="space-y-4 text-sm">
+            <div className="space-y-4 text-sm overflow-y-auto min-h-0 pr-1">
               <div className="rounded-none p-3 space-y-1.5" style={{ background: "rgba(0,212,255,0.03)", border: "1px solid rgba(0,212,255,0.1)" }}>
                 <Row label={t("alerts.dialog.time")} value={new Date(selected.ts).toISOString()} />
                 <Row label={t("alerts.dialog.source")} value={`${selected.src_ip}:${selected.src_port}`} />
@@ -447,8 +482,8 @@ export function AlertFeed({ alerts, engineAlerts, replayPhase, onClear }: Props)
                 )}
               </div>
 
-              {/* SHAP Explain — XGBoost only */}
-              {selected.engine === "xgboost" && (
+              {/* SHAP Explain — all ML engines */}
+              {["xgboost", "portscan", "dos_agg", "bot", "bruteforce"].includes(selected.engine) && (
                 <div className="space-y-2">
                   {/* Narrative — always visible after fetch */}
                   {shapNarrative && (

@@ -41,9 +41,21 @@ WEDNESDAY_CSV_NAME = "Wednesday-workingHours.pcap_ISCX.csv"
 DEFAULT_CSV_DIR = Path.home() / "bitirme/data/raw/cicids2017"
 
 
+_SCENARIO_DAY_MAP: dict[str, str] = {
+    "scenario_dos": "wednesday",
+    "scenario_portscan": "friday",
+    "scenario_bruteforce": "tuesday",
+    "scenario_bot": "friday",
+    "scenario_ddos": "friday",
+}
+
+
 def _day_from_pcap(pcap_path: str) -> str:
     """Infer day key from PCAP filename (case-insensitive)."""
     name = pcap_path.lower()
+    for tag, day in _SCENARIO_DAY_MAP.items():
+        if tag in name:
+            return day
     for day in DAILY_CSVS:
         if day in name:
             return day
@@ -112,6 +124,20 @@ class GroundTruthLoader:
         self._benign_count: int = 0
         self._loaded: bool = False
         self._load_error: str | None = None
+        # Optional slice universe override (set per-replay for sliced PCAPs).
+        # When set, compute_confusion / compute_ip_confusion use these row/IP
+        # counts as the universe rather than the full-day totals.
+        self._slice_universe: dict | None = None
+
+    def set_slice_universe(self, universe: dict | None) -> None:
+        """Override the eval universe to a PCAP-slice subset.
+
+        Expected shape:
+          {"flow_level": {"attack_rows": int, "benign_rows": int},
+           "ip_level":   {"attack_ips": int, "benign_ips": int}}
+        Pass None to clear and revert to full-day universe.
+        """
+        self._slice_universe = universe
 
     @classmethod
     def get_instance(cls, day: str = "wednesday", csv_dir: Path | None = None) -> GroundTruthLoader:
@@ -291,8 +317,23 @@ class GroundTruthLoader:
 
         true_positives = matched_attack_rows
         false_positives = matched_benign_rows
-        true_negatives = self._benign_count - false_positives
-        false_negatives = self._attack_count - true_positives
+
+        # Universe selection: slice override beats full-day total
+        if self._slice_universe and "flow_level" in self._slice_universe:
+            fl = self._slice_universe["flow_level"]
+            universe_attack = fl.get("attack_rows", self._attack_count)
+            universe_benign = fl.get("benign_rows", self._benign_count)
+        else:
+            universe_attack = self._attack_count
+            universe_benign = self._benign_count
+
+        true_negatives = universe_benign - false_positives
+        false_negatives = universe_attack - true_positives
+        # Guard against negative counts if alerts somehow exceed universe
+        if true_negatives < 0:
+            true_negatives = 0
+        if false_negatives < 0:
+            false_negatives = 0
         total = true_positives + true_negatives + false_positives + false_negatives
 
         accuracy   = (true_positives + true_negatives) / total if total > 0 else 0
@@ -346,6 +387,17 @@ class GroundTruthLoader:
         ip_fp = sum(1 for ip in alerted if self._ip_data[ip] == "benign")
         ip_fn = sum(1 for ip in non_alerted if self._ip_data[ip] == "attack")
         ip_tn = sum(1 for ip in non_alerted if self._ip_data[ip] == "benign")
+
+        # Slice universe override for IP-level confusion
+        if self._slice_universe and "ip_level" in self._slice_universe:
+            ipl = self._slice_universe["ip_level"]
+            slice_attack_total = ipl.get("attack_ips", ip_tp + ip_fn)
+            slice_benign_total = ipl.get("benign_ips", ip_fp + ip_tn)
+            # Clip TP/FP at slice attack/benign totals; recompute FN/TN
+            ip_tp = min(ip_tp, slice_attack_total)
+            ip_fp = min(ip_fp, slice_benign_total)
+            ip_fn = max(slice_attack_total - ip_tp, 0)
+            ip_tn = max(slice_benign_total - ip_fp, 0)
 
         total = ip_tp + ip_tn + ip_fp + ip_fn
         accuracy = (ip_tp + ip_tn) / total if total > 0 else 0

@@ -20,6 +20,23 @@ static const char* s_name = "bot_client_inspector";
 static const char* s_help = "per-source-IP bot client detection via outgoing SYN aggregation";
 static const uint32_t BCL_GID = 306, BCL_SID = 1;
 
+static void write_score_file(uint32_t src_ip, float score, const char* engine,
+                             const double* feats, unsigned n_feats) {
+    static FILE* sf = nullptr;
+    if (!sf) sf = fopen("/tmp/aegis_scores.jsonl", "a");
+    if (!sf) return;
+    fprintf(sf, "{\"engine\":\"%s\",\"src_ip\":\"%u.%u.%u.%u\",\"score\":%.6f,\"features\":[",
+        engine,
+        (src_ip>>24)&0xFF,(src_ip>>16)&0xFF,(src_ip>>8)&0xFF,src_ip&0xFF,
+        score);
+    for (unsigned i = 0; i < n_feats; i++) {
+        if (i > 0) fprintf(sf, ",");
+        fprintf(sf, "%.6f", feats[i]);
+    }
+    fprintf(sf, "]}\n");
+    fflush(sf);
+}
+
 static inline uint32_t gsip(snort::Packet* p) {
     if (!p) return 0; auto* ip = p->ptrs.ip_api.get_src();
     return (ip && ip->is_ip4()) ? ntohl(ip->get_ip4_value()) : 0;
@@ -37,16 +54,16 @@ static inline bool is_private_ip(uint32_t ip) {
 
 // AGG_SCALER_PARAMS_BEGIN
 BclScalerParams g_scaler = {
-    { 1.3862943611, 1.0986122887, 1.0986122887, 0.6931446806, 0.6514372920,
-      0.2876818225, 0.0099503309, 0.5108258238, 0.3364722366, 0.6514372920,
-      0.0000000000, 0.5108258238, 0.6931471806, 0.5108258238, 0.6547301044,
-      2.5852546487, 0.0000000000, 0.0000000000, 7.6095317727, 0.5108258238,
-      1.6094379124, 10.2737053763 },
-    { 0.8109302162, 0.6931471806, 0.4054651081, 0.2918230646, 0.6514372920,
-      0.2876822725, 0.0163673021, 0.4054653581, 0.2231440013, 0.9497111945,
-      8.0586476891, 0.2231440013, 0.2876820725, 0.1177828357, 0.0569154484,
-      1.4328143654, 0.2876818225, 0.6097156100, 2.0050006437, 0.8964884787,
-      1.1700712871, 0.6854398830 }
+    { 3.0000000000, 2.0000000000, 2.0000000000, 0.9999940000, 0.9182960000,
+      0.3333330000, 0.0100000000, 0.6666670000, 0.4285710000, 0.9182960000,
+      0.0000000000, 0.6666670000, 1.0000000000, 0.6666670000, 0.9302330000,
+      13.3333330000, 0.0000000000, 0.0000000000, 2262.3333330000, 0.6666670000,
+      4.3333330000, 28960.0000000000 },
+    { 4.0000000000, 2.0000000000, 1.0000000000, 0.5211220000, 0.9182960000,
+      0.3939400000, 0.0133330000, 0.6666670000, 0.3333340000, 1.5849630000,
+      1380.3883375000, 0.3333340000, 0.4000000000, 0.2222220000, 0.0914025000,
+      21.7638890000, 0.3636360000, 1.0000000000, 3550.9690480000, 1.6666670000,
+      6.2666670000, 8458.5000000000 }
 };
 // AGG_SCALER_PARAMS_END
 
@@ -55,8 +72,8 @@ static const snort::RuleMap rules[] = {
 };
 static const snort::Parameter bcl_params[] = {
     { "threshold",  snort::Parameter::PT_REAL,  "0.0:1.0", "0.50", "XGBoost threshold" },
-    { "model_path", snort::Parameter::PT_STRING, nullptr,
-      "/home/emirhan/bitirme/models/bot_client_model.json", "model path" },
+{ "model_path", snort::Parameter::PT_STRING, nullptr,
+  "/home/emirhan/bitirme/models/bot_client_v4.json", "model path" },
     { "window_sec", snort::Parameter::PT_INT,   "1:600",   "300",  "window seconds" },
     { "min_syns",   snort::Parameter::PT_INT,   "2:10000", "3",    "min outgoing SYNs" },
     { "suppress_ips", snort::Parameter::PT_STRING, nullptr,
@@ -130,8 +147,9 @@ public:
     }
 
     bool configure(snort::SnortConfig*) override {
-        if (!xgb.load(mp)) snort::ErrorMessage("[botcl] Model load failed.\n");
-        if (load_scaler_json(mp, g_scaler, AGG_FEATURE_COUNT))
+        std::string model_path = "/home/emirhan/bitirme/models/bot_client_v4.json";
+        if (!xgb.load(model_path)) snort::ErrorMessage("[botcl] Model load failed.\n");
+        if (load_scaler_json(model_path, g_scaler, AGG_FEATURE_COUNT))
             snort::LogMessage("[botcl] Loaded scaler from JSON\n");
         else
             snort::LogMessage("[botcl] Using hardcoded scaler params\n");
@@ -307,8 +325,9 @@ private:
             suppressed ? suppress_reason : "");
 
         if (alert && !suppressed) {
-            n_alert++; 
+            n_alert++;
             pr.last_alert_time = now;
+            write_score_file(pr.src_ip, score, "bot", raw, 22);
             snort::DetectionEngine::queue_event(BCL_GID, BCL_SID);
             snort::LogMessage("[botcl] ALERT: %u.%u.%u.%u score=%.4f\n",
                 (pr.src_ip>>24)&0xFF,(pr.src_ip>>16)&0xFF,(pr.src_ip>>8)&0xFF,pr.src_ip&0xFF, score);

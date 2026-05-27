@@ -57,12 +57,18 @@ KNOWN_ATTACKER_IPS = {
         'Friday': ['172.16.0.1'],
         'expected_attack_days': ['Wednesday', 'Friday'],
     },
+    'ddos_aggregator': {
+        'Wednesday': ['192.168.10.50'],
+        'Friday': ['192.168.10.50'],
+        'expected_attack_days': ['Wednesday', 'Friday'],
+    },
 }
 
 GID_PATTERNS = {
     'dos_aggregator': r'303:\d+:\d+',
     'bot_client': r'306:\d+:\d+',
     'bruteforce': r'307:\d+:\d+',
+    'ddos_aggregator': r'304:\d+:\d+',
 }
 
 
@@ -89,7 +95,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--alert-dir', type=str, required=True)
     parser.add_argument('--model-name', type=str, required=True,
-                        choices=['dos_aggregator', 'bot_client', 'bruteforce', 'portscan'])
+                        choices=['dos_aggregator', 'bot_client', 'bruteforce', 'portscan', 'ddos_aggregator'])
     parser.add_argument('--output', type=str, default=None)
     args = parser.parse_args()
 

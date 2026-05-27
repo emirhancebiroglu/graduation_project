@@ -1,0 +1,248 @@
+{
+  "_meta": {
+    "source": "scripts/eval_community_baselines.py (2026-05-26) — measured from combined alert_csv files, GID:1 only (no codec/raw noise)",
+    "ml_alerts_unit": "DoS = flow-level alert count; others = window-level alert count",
+    "community_alerts_unit": "GID:1 community-rule alerts only (excludes GID:116 codec/raw events)",
+    "fpr_definition": "standard flow-level FPR = FP_flows / (FP_flows + TN_flows) from GT CSV matching"
+  },
+  "dos": {
+    "pcap_name": "scenario_dos",
+    "active_engine": "xgboost",
+    "metric_level": "flow",
+    "gt_loader_day": "wednesday",
+    "ml": {
+      "alerts": 158615,
+      "confusion": {
+        "TP": 252657,
+        "FP": 7294,
+        "FN": 15,
+        "TN": 432737
+      },
+      "accuracy": 0.9893,
+      "precision": 0.9719,
+      "recall": 0.9999,
+      "f1": 0.9857,
+      "fpr": 0.0166,
+      "avg_score": null
+    },
+    "community": {
+      "alerts_total_day": 194734,
+      "alerts_on_attackers": 176372,
+      "fpr": 0.0817,
+      "confusion": {
+        "TP": 252581,
+        "FP": 35955,
+        "FN": 91,
+        "TN": 404076
+      }
+    },
+    "display": {
+      "title_key": "scenarios.dos.title",
+      "attack_label": "DoS (Hulk, GoldenEye, Slowloris, Slowhttptest)",
+      "dataset_label": "CIC-IDS2017 Wednesday",
+      "generalization_chip": "UNSW Recall \u2265 0.81 \u00b7 Wed FPR 1.68% \u00b7 FN=15"
+    },
+    "slice_universe": {
+      "flow_level": {
+        "matched_gt_flows": 15494,
+        "attack_rows": 252596,
+        "benign_rows": 17161
+      },
+      "ip_level": {
+        "src_ips_seen": 222,
+        "attack_ips": 1,
+        "benign_ips": 61
+      }
+    }
+  },
+  "ddos": {
+    "pcap_name": "scenario_ddos",
+    "active_engine": "dos_agg",
+    "metric_level": "window",
+    "gt_loader_day": "friday",
+    "ml": {
+      "alerts": 20,
+      "confusion": {
+        "TP": 1,
+        "FP": 0,
+        "FN": 7,
+        "TN": 102,
+        "TP_windows": 20,
+        "FP_windows": 0,
+        "FN_windows": 0,
+        "TN_windows": null
+      },
+      "accuracy": 0.9364,
+      "precision": 1.0,
+      "recall": 0.125,
+      "f1": 0.2222,
+      "fpr": 0.0,
+      "attacker_ips_detected": "1/1 (172.16.0.1)",
+      "target": "192.168.10.50:80",
+      "avg_score": 1.0
+    },
+    "community": {
+      "alerts_total_day": 19331,
+      "alerts_on_attackers": 17992,
+      "fpr": 0.0668
+    },
+    "display": {
+      "title_key": "scenarios.ddos.title",
+      "attack_label": "DDoS LOIT (HTTP flood)",
+      "dataset_label": "CIC-IDS2017 Friday PM",
+      "generalization_chip": "Wed + Fri: Recall 1.0 \u00b7 0 FP"
+    },
+    "slice_universe": {
+      "flow_level": {
+        "matched_gt_flows": 141203,
+        "attack_rows": 137917,
+        "benign_rows": 21284
+      },
+      "ip_level": {
+        "src_ips_seen": 418,
+        "attack_ips": 8,
+        "benign_ips": 102
+      }
+    }
+  },
+  "portscan": {
+    "pcap_name": "scenario_portscan",
+    "active_engine": "portscan",
+    "metric_level": "window",
+    "gt_loader_day": "friday",
+    "ml": {
+      "alerts": 27,
+      "confusion": {
+        "TP_windows": 27,
+        "FP_windows": 0,
+        "FN_windows": 10,
+        "TN_windows": null
+      },
+      "attacker_ips_detected": "1/1 (172.16.0.1)",
+      "window_recall": 0.7297,
+      "syn_coverage": 0.9946,
+      "avg_score": null,
+      "fpr": 0.0
+    },
+    "community": {
+      "alerts_total_day": 19331,
+      "alerts_on_attackers": 17992,
+      "fpr": 0.0668
+    },
+    "display": {
+      "title_key": "scenarios.portscan.title",
+      "attack_label": "PortScan (SYN/FIN/NULL/XMAS/UDP)",
+      "dataset_label": "CIC-IDS2017 Friday AM",
+      "generalization_chip": "Cupid 2/2 PASS"
+    },
+    "slice_universe": {
+      "flow_level": {
+        "matched_gt_flows": 16120,
+        "attack_rows": 11234,
+        "benign_rows": 29263
+      },
+      "ip_level": {
+        "src_ips_seen": 569,
+        "attack_ips": 8,
+        "benign_ips": 139
+      }
+    }
+  },
+  "bruteforce": {
+    "pcap_name": "scenario_bruteforce",
+    "active_engine": "bruteforce",
+    "metric_level": "window",
+    "gt_loader_day": "tuesday",
+    "ml": {
+      "alerts": 3,
+      "confusion": {
+        "TP_windows": 3,
+        "FP_windows": 0,
+        "FN_windows": 0,
+        "TN_windows": null
+      },
+      "attacker_ips_detected": "1/1 (172.16.0.1)",
+      "dedup_seconds": 1800,
+      "avg_score": 0.993,
+      "fpr": 0.0
+    },
+    "community": {
+      "alerts_total_day": 31930,
+      "alerts_on_attackers": 12514,
+      "fpr": 0.074
+    },
+    "display": {
+      "title_key": "scenarios.bruteforce.title",
+      "attack_label": "SSH-Patator + FTP-Patator",
+      "dataset_label": "CIC-IDS2017 Tuesday",
+      "generalization_chip": "10/10 synthetic tools (Patator, Hydra, Medusa, Ncrack\u2026)"
+    },
+    "slice_universe": {
+      "flow_level": {
+        "matched_gt_flows": 6690,
+        "attack_rows": 354,
+        "benign_rows": 44679
+      },
+      "ip_level": {
+        "src_ips_seen": 741,
+        "attack_ips": 1,
+        "benign_ips": 188
+      }
+    }
+  },
+  "bot": {
+    "pcap_name": "scenario_bot",
+    "active_engine": "bot",
+    "metric_level": "window",
+    "gt_loader_day": "friday",
+    "ml": {
+      "alerts": 63,
+      "confusion": {
+        "TP_windows": 63,
+        "FP_windows": 0,
+        "FN_windows": 0,
+        "TN_windows": null
+      },
+      "attacker_ips_detected": "7/7",
+      "attacker_ip_list": [
+        "192.168.10.5",
+        "192.168.10.8",
+        "192.168.10.9",
+        "192.168.10.12",
+        "192.168.10.14",
+        "192.168.10.15",
+        "192.168.10.17"
+      ],
+      "windows_per_ip_range": "4-14",
+      "score_range": [
+        0.85,
+        0.99
+      ],
+      "avg_score": 0.92,
+      "fpr": 0.0
+    },
+    "community": {
+      "alerts_total_day": 19331,
+      "alerts_on_attackers": 17992,
+      "fpr": 0.0668
+    },
+    "display": {
+      "title_key": "scenarios.bot.title",
+      "attack_label": "Bot Client (CIC-2017 Bot v2 \u2014 ARES C2)",
+      "dataset_label": "CIC-IDS2017 Friday PM",
+      "generalization_chip": "MTA Xworm C2 @ 0.874"
+    },
+    "slice_universe": {
+      "flow_level": {
+        "matched_gt_flows": 8987,
+        "attack_rows": 96,
+        "benign_rows": 50942
+      },
+      "ip_level": {
+        "src_ips_seen": 841,
+        "attack_ips": 8,
+        "benign_ips": 217
+      }
+    }
+  }
+}

@@ -1,9 +1,14 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useT } from "@/lib/i18n";
-import type { ReplayPhase } from "@/lib/types";
+import type { ReplayPhase, ScenarioKey, ScenarioPayload } from "@/lib/types";
 
-type Props = { replayPhase: ReplayPhase };
+type Props = {
+  replayPhase: ReplayPhase;
+  scenarios?: ScenarioPayload[];
+  activeScenario?: ScenarioKey;
+  onSelectScenario?: (key: ScenarioKey) => void;
+};
 
 type Stat = {
   value: string;
@@ -92,7 +97,15 @@ const STATS_EN: Stat[] = [
 const DISPLAY_MS = 7000;
 const FADE_MS = 500;
 
-export function ThreatBriefing({ replayPhase }: Props) {
+const SCENARIO_COLOR: Record<ScenarioKey, string> = {
+  dos: "#ff3b3b",
+  ddos: "#f97316",
+  portscan: "#a855f7",
+  bruteforce: "#facc15",
+  bot: "#ec4899",
+};
+
+export function ThreatBriefing({ replayPhase, scenarios, activeScenario, onSelectScenario }: Props) {
   const { locale } = useT();
   const STATS = locale === "tr" ? STATS_TR : STATS_EN;
 
@@ -299,8 +312,40 @@ export function ThreatBriefing({ replayPhase }: Props) {
           />
         </div>
 
+        {/* Scenario selector */}
+        {scenarios && scenarios.length > 0 && onSelectScenario && (
+          <div className="mt-10 flex flex-col items-center gap-2">
+            <span className="text-[8px] font-mono tracking-[0.2em] uppercase" style={{ color: "rgba(0,212,255,0.3)" }}>
+              {locale === "tr" ? "senaryo seçin" : "select scenario"}
+            </span>
+            <div className="flex flex-wrap justify-center gap-2">
+              {scenarios.map((s) => {
+                const color = SCENARIO_COLOR[s.key];
+                const isActive = s.key === activeScenario;
+                return (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => onSelectScenario(s.key)}
+                    className="px-3 py-1.5 text-[10px] font-mono tracking-wider uppercase transition-all"
+                    style={{
+                      border: `1px solid ${isActive ? color : `${color}40`}`,
+                      background: isActive ? `${color}18` : "rgba(15,19,24,0.6)",
+                      color: isActive ? color : `${color}80`,
+                      boxShadow: isActive ? `0 0 10px ${color}30` : "none",
+                    }}
+                  >
+                    {isActive && <span style={{ marginRight: "4px" }}>●</span>}
+                    {s.display.attack_label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* CTA */}
-        <div className="mt-12 flex items-center gap-2">
+        <div className="mt-6 flex items-center gap-2">
           <span
             className="w-1.5 h-1.5 rounded-full"
             style={{ background: "#00d4ff", animation: "tbPulse 1.5s infinite" }}

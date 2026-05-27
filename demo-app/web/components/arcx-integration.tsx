@@ -1,10 +1,11 @@
 "use client";
 import { useState } from "react";
 import { useT } from "@/lib/i18n";
-import type { Alert } from "@/lib/types";
+import type { Alert, ReplayPhase } from "@/lib/types";
 
 type Props = {
   alerts: Alert[];
+  replayPhase: ReplayPhase;
 };
 
 const ENGINE_COLOR: Record<string, string> = {
@@ -40,11 +41,12 @@ function SeverityDot({ score }: { score?: number | null }) {
   );
 }
 
-export function ArcxIntegration({ alerts }: Props) {
+export function ArcxIntegration({ alerts, replayPhase }: Props) {
   const { t } = useT();
   const [open, setOpen] = useState(false);
 
-  const recent = alerts.slice(-5).reverse();
+  const mlAlerts = alerts.filter((a) => a.engine !== "community");
+  const recent = mlAlerts.slice(0, 5);
 
   return (
     <>
@@ -300,13 +302,13 @@ export function ArcxIntegration({ alerts }: Props) {
                     <span
                       className="w-1.5 h-1.5 rounded-full"
                       style={{
-                        background: alerts.length > 0 ? "#ff3b3b" : "#7c3aed",
-                        boxShadow: alerts.length > 0 ? "0 0 6px #ff3b3b" : "0 0 4px #7c3aed",
-                        animation: alerts.length > 0 ? "pulse 1s infinite" : "none",
+                        background: mlAlerts.length > 0 ? "#ff3b3b" : "#7c3aed",
+                        boxShadow: mlAlerts.length > 0 ? "0 0 6px #ff3b3b" : "0 0 4px #7c3aed",
+                        animation: mlAlerts.length > 0 ? "pulse 1s infinite" : "none",
                       }}
                     />
-                    <span className="text-[8px] font-mono" style={{ color: alerts.length > 0 ? "#ff3b3b" : "rgba(124,58,237,0.5)" }}>
-                      {alerts.length > 0 ? `${alerts.length} ALERT` : "MONITORING"}
+                    <span className="text-[8px] font-mono" style={{ color: mlAlerts.length > 0 ? "#ff3b3b" : "rgba(124,58,237,0.5)" }}>
+                      {mlAlerts.length > 0 ? `${mlAlerts.length} ALERT` : "MONITORING"}
                     </span>
                   </div>
                 </div>
@@ -316,7 +318,7 @@ export function ArcxIntegration({ alerts }: Props) {
               <div className="flex items-center gap-2 my-4 px-1">
                 <div className="text-[8px] font-mono shrink-0" style={{ color: "rgba(124,58,237,0.5)" }}>AEGIS IDS</div>
                 <div className="relative flex-1 h-px" style={{ background: "rgba(124,58,237,0.15)" }}>
-                  {alerts.length > 0 && (
+                  {mlAlerts.length > 0 && (
                     <>
                       <div className="flow-dot" />
                       <div className="flow-dot" />
@@ -339,21 +341,26 @@ export function ArcxIntegration({ alerts }: Props) {
                   <span className="text-[9px] font-mono tracking-widest" style={{ color: "rgba(124,58,237,0.7)" }}>
                     {t("arcx.liveAlerts")}
                   </span>
-                  {alerts.length > 0 && (
+                  {mlAlerts.length > 0 && (
                     <span
                       className="ml-auto text-[8px] font-mono px-1.5 py-0.5"
                       style={{ background: "rgba(124,58,237,0.15)", color: "#7c3aed" }}
                     >
-                      {alerts.length}
+                      {mlAlerts.length}
                     </span>
                   )}
                 </div>
 
                 <div className="p-2 space-y-1" style={{ minHeight: "80px" }}>
                   {recent.length === 0 ? (
-                    <div className="flex items-center justify-center h-16">
+                    <div className="flex items-center justify-center h-16 gap-2">
+                      {(replayPhase === "running" || replayPhase === "draining") && (
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#7c3aed", boxShadow: "0 0 6px #7c3aed", animation: "pulse 1.5s infinite" }} />
+                      )}
                       <span className="text-[9px] font-mono" style={{ color: "rgba(148,163,184,0.25)" }}>
-                        {t("arcx.noAlerts")}
+                        {replayPhase === "running" || replayPhase === "draining"
+                          ? t("arcx.waiting")
+                          : t("arcx.noAlerts")}
                       </span>
                     </div>
                   ) : (

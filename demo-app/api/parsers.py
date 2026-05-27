@@ -16,6 +16,7 @@ _GID_ENGINE: dict[int, Engine] = {
     301: Engine.xgboost,
     302: Engine.portscan,
     303: Engine.dos_agg,
+    304: Engine.ddos,
     306: Engine.bot,
     307: Engine.bruteforce,
     1:   Engine.community,
@@ -25,6 +26,7 @@ _GID_ENGINE: dict[int, Engine] = {
 _MITRE_MAP: dict[int, tuple[str, str]] = {
     301: ("T1499", "TA0040"),  # Endpoint Denial of Service
     303: ("T1498", "TA0040"),  # Network Denial of Service
+    304: ("T1498", "TA0040"),  # Network Denial of Service (DDoS aggregator)
     302: ("T1046", "TA0043"),  # Network Service Discovery
     307: ("T1110", "TA0006"),  # Brute Force
     306: ("T1071", "TA0011"),  # Application Layer Protocol (C2)
@@ -34,7 +36,8 @@ _MITRE_MAP: dict[int, tuple[str, str]] = {
 _GID_MSG: dict[int, str] = {
     301: "DoS detected (per-flow)",
     302: "Port scan detected",
-    303: "DoS SYN flood detected",
+    303: "DoS flood detected",
+    304: "DDoS HTTP flood detected",
     306: "Bot client detected",
     307: "Brute force detected",
 }

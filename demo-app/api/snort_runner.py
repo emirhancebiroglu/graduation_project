@@ -15,6 +15,8 @@ from typing import Any
 logger = logging.getLogger("snort-runner")
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
+# NOTE: _ensure_combined_plugins() is called at the bottom of this module, after
+# all symbols are defined, to create symlinks in combined_plugins/ on first run.
 
 _HOME = Path.home()
 _SNORT_CWD = "/usr/local/etc/snort"
@@ -22,19 +24,77 @@ _COMBINED_CONFIG = str(_HOME / "bitirme/configs/snort_combined.lua")
 _COMBINED_PLUGIN = str(_HOME / "bitirme/plugins/combined_plugins")
 _RUN_ROOT = Path("/tmp/demo-runs")
 
-# PCAP duration fallbacks (seconds) used when capinfos is unavailable
+# Plugin .so files to symlink into combined_plugins/ (relative to plugins/)
+_PLUGIN_SOURCES: list[str] = [
+    "dos_inspector/build/dos_inspector.so",
+    "portscan_inspector/build/portscan_inspector.so",
+    "dos_aggregator/build/dos_aggregator.so",
+    "ddos_aggregator/build/ddos_aggregator.so",
+    "bot_client_inspector/build/bot_client_inspector.so",
+    "bruteforce_inspector/build/bruteforce_inspector.so",
+]
+
+
+def _ensure_combined_plugins() -> None:
+    """Create combined_plugins/ and symlink all plugin .so files into it.
+
+    Runs at import time so every API restart self-heals the plugin directory.
+    Safe to call repeatedly — only re-symlinks if dst is missing or dangling.
+    """
+    plugins_root = _HOME / "bitirme/plugins"
+    combined = Path(_COMBINED_PLUGIN)
+    combined.mkdir(parents=True, exist_ok=True)
+    for rel_src in _PLUGIN_SOURCES:
+        src = plugins_root / rel_src
+        dst = combined / src.name
+        # Re-symlink if dst is absent OR is a dangling symlink
+        needs_link = not dst.exists() or (dst.is_symlink() and not dst.resolve().exists())
+        if needs_link:
+            if src.exists():
+                if dst.is_symlink():
+                    dst.unlink()
+                dst.symlink_to(src)
+                logger.info("combined_plugins: linked %s", src.name)
+            else:
+                logger.warning("combined_plugins: source missing, skip: %s", src)
+
+# PCAP duration fallbacks (seconds).
 _PCAP_DURATION_FALLBACK: dict[str, float] = {
     "normal_2min": 120.0,
     "dos_hulk_2min": 120.0,
     "full_wednesday": 28800.0,
+    "scenario_dos": 120.0,
+    "scenario_ddos": 80.0,
+    "scenario_portscan": 75.0,
+    "scenario_bruteforce": 135.0,
+    "scenario_bot": 335.0,
 }
 
-# Actual wall-clock replay time at disk speed — used for progress bar accuracy.
-# Short PCAPs replay in ~1.5-3s regardless of PCAP content duration.
+# tcpreplay PPS per scenario.
+# PCAPs include benign padding so window-level inspectors have time to fire inference.
+# dos: 270K pkts / 30s ≈ 9000 pps (flow-level, no window concern)
+# ddos: 735K pkts (335K attack + 400K benign) / 9600 pps ≈ 77s > 60s window ✓
+# portscan: 178K pkts (98K attack + 80K benign) / 2425 pps ≈ 73s > 60s window ✓
+# bruteforce: 2429K pkts (829K attack + 1600K benign) / 18400 pps ≈ 132s > 120s window ✓
+# bot: 2162K pkts (262K attack + 1900K benign) / 6550 pps ≈ 330s > 300s window ✓
+_TCPREPLAY_PPS: dict[str, int] = {
+    "scenario_dos": 9000,
+    "scenario_ddos": 9600,
+    "scenario_portscan": 2425,
+    "scenario_bruteforce": 18400,
+    "scenario_bot": 6550,
+}
+
+# Wall-clock seconds for progress bar (padded PCAP sizes ÷ PPS).
 PCAP_REPLAY_WALL_CLOCK: dict[str, float] = {
     "normal_2min": 3.0,
     "dos_hulk_2min": 3.0,
     "full_wednesday": 180.0,
+    "scenario_dos": 32.0,
+    "scenario_ddos": 80.0,
+    "scenario_portscan": 75.0,
+    "scenario_bruteforce": 135.0,
+    "scenario_bot": 335.0,
 }
 
 
@@ -80,7 +140,8 @@ def _get_pcap_duration(pcap_path: str, pcap_name: str) -> float:
 class SnortRunner:
     def __init__(self) -> None:
         self._state: RunState | None = None
-        self._proc: subprocess.Popen | None = None
+        self._proc: subprocess.Popen | None = None        # snort process (or file-replay snort)
+        self._replay_proc: subprocess.Popen | None = None  # tcpreplay process (live mode only)
         self._log_handles: list = []
 
     # ── public interface ──────────────────────────────────────────────────────
@@ -95,12 +156,14 @@ class SnortRunner:
     def pcap_progress(self) -> float:
         if self._state is None or self._state.status != RunStatus.running:
             return 0.0
-        # If snort process exited naturally, progress is complete
-        if self._proc is not None and self._proc.poll() is not None:
+        # In live mode: tcpreplay done means replay complete
+        if self._replay_proc is not None and self._replay_proc.poll() is not None:
+            return 1.0
+        # In file mode: snort done means replay complete
+        if self._replay_proc is None and self._proc is not None and self._proc.poll() is not None:
             return 1.0
         elapsed = (datetime.now(timezone.utc) - self._state.started_at).total_seconds()
         wall_clock = PCAP_REPLAY_WALL_CLOCK.get(self._state.pcap_name, self._state.pcap_duration_s)
-        # Cap at 99% while still processing — final jump to 100% happens on exit
         return min(elapsed / wall_clock, 0.99)
 
     async def start(
@@ -118,7 +181,6 @@ class SnortRunner:
 
         run_dir = _RUN_ROOT / run_id
         combined_dir = run_dir / "combined"
-        # Legacy paths kept so alert_tailer and main.py can find files
         xgb_dir = run_dir / "xgboost"
         comm_dir = run_dir / "community"
         combined_dir.mkdir(parents=True, exist_ok=True)
@@ -135,35 +197,59 @@ class SnortRunner:
             pcap_duration_s=duration,
         )
 
+        pps = _TCPREPLAY_PPS.get(pcap_name)
+        use_live = pps is not None
+
         try:
-            self._proc = self._launch_combined(pcap_path, str(combined_dir))
+            if use_live:
+                snort_proc = self._launch_snort_live(str(combined_dir))
+                self._proc = snort_proc
+                self._replay_proc = None
+                # Notify callers (start alert tailer, broadcast status) before injecting traffic
+                if on_launched is not None:
+                    try:
+                        await on_launched
+                    except Exception as exc:
+                        logger.warning("on_launched callback error (ignored): %s", exc)
+                if on_launched_with_dir is not None:
+                    try:
+                        await on_launched_with_dir(str(run_dir))
+                    except Exception as exc:
+                        logger.warning("on_launched_with_dir callback error (ignored): %s", exc)
+                # Give snort time to initialize its listener before injecting packets
+                await asyncio.sleep(1.5)
+                self._replay_proc = self._launch_tcpreplay(pcap_path, str(combined_dir), pps)
+            else:
+                self._proc = self._launch_combined(pcap_path, str(combined_dir))
+                self._replay_proc = None
         except Exception as exc:
             self._state.status = RunStatus.errored
             self._state.error = f"Failed to launch Snort: {exc}"
             logger.error("Snort launch failed: %s", exc)
             return self._state
 
-        # Immediately notify callers that Snort is running (don't wait for 1s poll loop)
-        if on_launched is not None:
-            try:
-                await on_launched
-            except Exception as exc:
-                logger.warning("on_launched callback error (ignored): %s", exc)
-        if on_launched_with_dir is not None:
-            try:
-                await on_launched_with_dir(str(run_dir))
-            except Exception as exc:
-                logger.warning("on_launched_with_dir callback error (ignored): %s", exc)
+        # For file-mode only: fire callbacks after launch
+        if not use_live:
+            if on_launched is not None:
+                try:
+                    await on_launched
+                except Exception as exc:
+                    logger.warning("on_launched callback error (ignored): %s", exc)
+            if on_launched_with_dir is not None:
+                try:
+                    await on_launched_with_dir(str(run_dir))
+                except Exception as exc:
+                    logger.warning("on_launched_with_dir callback error (ignored): %s", exc)
 
-        # Check immediately for launch errors (non-zero exit within ms of launch = config error).
-        # Normal PCAP completion is handled by _status_broadcaster's check_natural_exit().
         await asyncio.sleep(0.5)
 
         if self._state.status != RunStatus.running:
             return self._state
 
-        if self._proc is not None:
-            rc = self._proc.poll()
+        # In live mode, snort stays alive; only check for immediate crash
+        check_proc = self._proc
+        if check_proc is not None:
+            rc = check_proc.poll()
             if rc is not None and rc != 0:
                 self._state.status = RunStatus.errored
                 self._state.error = f"Snort exited with error (exit {rc})"
@@ -173,6 +259,18 @@ class SnortRunner:
         return self._state
 
     async def stop(self) -> None:
+        # Stop tcpreplay first (stops packet injection)
+        if self._replay_proc is not None and self._replay_proc.poll() is None:
+            logger.info("Sending SIGTERM to tcpreplay (pid=%d)", self._replay_proc.pid)
+            self._replay_proc.terminate()
+            try:
+                await asyncio.wait_for(asyncio.to_thread(self._replay_proc.wait), timeout=3.0)
+            except asyncio.TimeoutError:
+                self._replay_proc.kill()
+                await asyncio.to_thread(self._replay_proc.wait)
+        self._replay_proc = None
+
+        # Then stop snort
         if self._proc is not None and self._proc.poll() is None:
             logger.info("Sending SIGTERM to snort (pid=%d)", self._proc.pid)
             self._proc.terminate()
@@ -197,7 +295,14 @@ class SnortRunner:
             logger.warning("cleanup error (ignored): %s", exc)
 
     def check_natural_exit(self) -> bool:
-        """Return True if the combined process has exited naturally (PCAP fully replayed)."""
+        """Return True when the replay is done.
+
+        Live mode: tcpreplay process has exited (all packets sent).
+        File mode: snort process has exited (PCAP fully consumed).
+        """
+        if self._replay_proc is not None:
+            # Live capture mode — done when tcpreplay finishes
+            return self._replay_proc.poll() is not None
         if self._proc is None:
             return False
         return self._proc.poll() is not None
@@ -205,6 +310,7 @@ class SnortRunner:
     # ── private ───────────────────────────────────────────────────────────────
 
     def _launch_combined(self, pcap_path: str, out_dir: str) -> subprocess.Popen:
+        """File-replay mode: snort reads PCAP directly."""
         env = _xgboost_env()
 
         stdout_fh = open(f"{out_dir}/snort_stdout.log", "wb")
@@ -212,6 +318,7 @@ class SnortRunner:
         self._log_handles = [stdout_fh, stderr_fh]
 
         cmd = [
+            "stdbuf", "-oL",
             "snort",
             "-c", _COMBINED_CONFIG,
             "--plugin-path", _COMBINED_PLUGIN,
@@ -221,7 +328,7 @@ class SnortRunner:
             "--warn-all",
         ]
 
-        logger.info("Launching combined Snort: %s", " ".join(cmd))
+        logger.info("Launching combined Snort (file mode): %s", " ".join(cmd))
         proc = subprocess.Popen(
             cmd,
             cwd=_SNORT_CWD,
@@ -230,6 +337,60 @@ class SnortRunner:
             stderr=stderr_fh,
         )
         logger.info("Combined Snort launched (pid=%d)", proc.pid)
+        return proc
+
+    def _launch_snort_live(self, out_dir: str) -> subprocess.Popen:
+        """Start snort listening on lo interface (live capture mode)."""
+        env = _xgboost_env()
+
+        snort_stdout_fh = open(f"{out_dir}/snort_stdout.log", "wb")
+        snort_stderr_fh = open(f"{out_dir}/snort_stderr.log", "wb")
+        # Reserve slots 0-1 for snort; tcpreplay handles added in _launch_tcpreplay
+        self._log_handles = [snort_stdout_fh, snort_stderr_fh]
+
+        snort_cmd = [
+            "stdbuf", "-oL",
+            "snort",
+            "-c", _COMBINED_CONFIG,
+            "--plugin-path", _COMBINED_PLUGIN,
+            "-i", "lo",
+            "-A", "alert_csv",
+            "-l", out_dir,
+            "--warn-all",
+        ]
+
+        logger.info("Launching Snort (live mode, iface=lo): %s", " ".join(snort_cmd))
+        proc = subprocess.Popen(
+            snort_cmd,
+            cwd=_SNORT_CWD,
+            env=env,
+            stdout=snort_stdout_fh,
+            stderr=snort_stderr_fh,
+        )
+        logger.info("Snort live launched (pid=%d)", proc.pid)
+        return proc
+
+    def _launch_tcpreplay(self, pcap_path: str, out_dir: str, pps: int) -> subprocess.Popen:
+        """Start tcpreplay injecting pcap_path onto lo at pps packets/second."""
+        replay_stdout_fh = open(f"{out_dir}/tcpreplay_stdout.log", "wb")
+        replay_stderr_fh = open(f"{out_dir}/tcpreplay_stderr.log", "wb")
+        self._log_handles.extend([replay_stdout_fh, replay_stderr_fh])
+
+        replay_cmd = [
+            "tcpreplay",
+            f"--pps={pps}",
+            "--loop=1",
+            "-i", "lo",
+            pcap_path,
+        ]
+
+        logger.info("Launching tcpreplay: %s", " ".join(replay_cmd))
+        proc = subprocess.Popen(
+            replay_cmd,
+            stdout=replay_stdout_fh,
+            stderr=replay_stderr_fh,
+        )
+        logger.info("tcpreplay launched (pid=%d)", proc.pid)
         return proc
 
     def _close_log_handles(self) -> None:
@@ -243,3 +404,7 @@ class SnortRunner:
 
 class AlreadyRunningError(Exception):
     pass
+
+
+# Ensure combined_plugins/ dir + symlinks exist at import time
+_ensure_combined_plugins()

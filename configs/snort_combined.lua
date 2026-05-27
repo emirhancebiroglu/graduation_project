@@ -124,7 +124,7 @@ portscan_inspector =
     model_path   = "/home/emirhan/bitirme/models/portscan_aggregator_model_v4d.json",
     window_sec   = 60,
     min_packets  = 5,
-    min_dst_ports = 1,
+    min_dst_ports = 30,
 }
 
 -- â"€â"€â"€ DoS Aggregator (Cross-flow SYN rate) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
