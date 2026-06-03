@@ -113,13 +113,13 @@ export function ArcxIntegration({ alerts, replayPhase }: Props) {
             fill="rgba(124,58,237,0.4)" stroke="#7c3aed" strokeWidth="0.5" />
         </svg>
         <span
-          className="text-[8px] font-mono tracking-widest"
+          className="text-[9px] font-mono tracking-widest"
           style={{
-            color: "rgba(124,58,237,0.7)",
+            color: "rgba(124,58,237,0.9)",
             writingMode: "vertical-rl",
             textOrientation: "mixed",
             transform: "rotate(180deg)",
-            letterSpacing: "0.15em",
+            letterSpacing: "0.12em",
           }}
         >
           {t("arcx.buttonLabel")}
@@ -156,7 +156,7 @@ export function ArcxIntegration({ alerts, replayPhase }: Props) {
             <div className="w-1 h-4" style={{ background: "rgba(124,58,237,0.8)", boxShadow: "0 0 6px rgba(124,58,237,0.5)" }} />
             <div>
               <span className="section-label" style={{ color: "#7c3aed" }}>{t("arcx.title")}</span>
-              <p className="text-[9px] font-mono mt-0.5" style={{ color: "rgba(148,163,184,0.4)" }}>{t("arcx.subtitle")}</p>
+              <p className="text-[10px] font-mono mt-0.5" style={{ color: "rgba(148,163,184,0.7)" }}>{t("arcx.subtitle")}</p>
             </div>
             <button
               onClick={() => setOpen(false)}
@@ -186,16 +186,16 @@ export function ArcxIntegration({ alerts, replayPhase }: Props) {
                   </svg>
                   <span className="text-[13px] font-mono font-bold tracking-widest" style={{ color: "#7c3aed", letterSpacing: "0.2em" }}>ARCX</span>
                 </div>
-                <span className="text-[9px] font-mono" style={{ color: "rgba(124,58,237,0.5)" }}>·</span>
-                <span className="text-[9px] font-mono" style={{ color: "rgba(148,163,184,0.5)" }}>{t("arcx.platformLabel")}</span>
+                <span className="text-[10px] font-mono" style={{ color: "rgba(124,58,237,0.6)" }}>·</span>
+                <span className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.75)" }}>{t("arcx.platformLabel")}</span>
                 <div className="ml-auto flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#10b981", boxShadow: "0 0 4px #10b981" }} />
-                  <span className="text-[8px] font-mono" style={{ color: "rgba(16,185,129,0.6)" }}>ONLINE</span>
+                  <span className="text-[10px] font-mono font-semibold" style={{ color: "rgba(16,185,129,0.85)" }}>ONLINE</span>
                 </div>
               </div>
 
               {/* Existing modules label */}
-              <p className="text-[8px] font-mono tracking-widest mb-2 px-1" style={{ color: "rgba(148,163,184,0.3)" }}>
+              <p className="text-[10px] font-mono tracking-widest mb-2 px-1" style={{ color: "rgba(148,163,184,0.6)" }}>
                 {t("arcx.existingModules")}
               </p>
 
@@ -218,12 +218,12 @@ export function ArcxIntegration({ alerts, replayPhase }: Props) {
                     </svg>
                     <span className="text-[10px] font-mono font-semibold" style={{ color: "#00d4ff" }}>{t("arcx.mod1Title")}</span>
                   </div>
-                  <p className="text-[8px] font-mono" style={{ color: "rgba(148,163,184,0.45)" }}>{t("arcx.mod1Desc")}</p>
+                  <p className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.65)" }}>{t("arcx.mod1Desc")}</p>
                   <div className="mt-2 flex items-center gap-1">
                     <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: "rgba(0,212,255,0.08)" }}>
                       <div className="h-full rounded-full" style={{ width: "62%", background: "#00d4ff", opacity: 0.5 }} />
                     </div>
-                    <span className="text-[8px] font-mono" style={{ color: "rgba(0,212,255,0.4)" }}>62%</span>
+                    <span className="text-[10px] font-mono font-semibold" style={{ color: "rgba(0,212,255,0.7)" }}>62%</span>
                   </div>
                 </div>
 
@@ -243,10 +243,10 @@ export function ArcxIntegration({ alerts, replayPhase }: Props) {
                     </svg>
                     <span className="text-[10px] font-mono font-semibold" style={{ color: "#f59e0b" }}>{t("arcx.mod2Title")}</span>
                   </div>
-                  <p className="text-[8px] font-mono" style={{ color: "rgba(148,163,184,0.45)" }}>{t("arcx.mod2Desc")}</p>
+                  <p className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.65)" }}>{t("arcx.mod2Desc")}</p>
                   <div className="mt-2 flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#10b981" }} />
-                    <span className="text-[8px] font-mono" style={{ color: "rgba(16,185,129,0.6)" }}>NOMINAL</span>
+                    <span className="text-[10px] font-mono font-semibold" style={{ color: "rgba(16,185,129,0.85)" }}>NOMINAL</span>
                   </div>
                 </div>
 
@@ -265,14 +265,14 @@ export function ArcxIntegration({ alerts, replayPhase }: Props) {
                     </svg>
                     <span className="text-[10px] font-mono font-semibold" style={{ color: "#10b981" }}>{t("arcx.mod3Title")}</span>
                   </div>
-                  <p className="text-[8px] font-mono" style={{ color: "rgba(148,163,184,0.45)" }}>{t("arcx.mod3Desc")}</p>
+                  <p className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.65)" }}>{t("arcx.mod3Desc")}</p>
                   <div className="mt-2">
                     <span className="text-[9px] font-mono font-semibold" style={{ color: "#10b981" }}>99.8%</span>
-                    <span className="text-[8px] font-mono ml-1" style={{ color: "rgba(16,185,129,0.4)" }}>uptime</span>
+                    <span className="text-[10px] font-mono ml-1" style={{ color: "rgba(16,185,129,0.65)" }}>uptime</span>
                   </div>
                 </div>
 
-                {/* Module 4 — Security Threat (NEW — Aegis) */}
+                {/* Module 4 — Security Threat (NEW — StratosAI) */}
                 <div
                   className="p-3 relative"
                   style={{
@@ -284,7 +284,7 @@ export function ArcxIntegration({ alerts, replayPhase }: Props) {
                   {/* NEW badge */}
                   <div
                     className="absolute -top-px -right-px px-1.5 py-0.5"
-                    style={{ background: "#7c3aed", fontSize: "7px", fontFamily: "monospace", color: "#fff", letterSpacing: "0.08em" }}
+                    style={{ background: "#7c3aed", fontSize: "9px", fontFamily: "monospace", color: "#fff", letterSpacing: "0.08em", fontWeight: 600 }}
                   >
                     {t("arcx.mod4Badge")}
                   </div>
@@ -297,7 +297,7 @@ export function ArcxIntegration({ alerts, replayPhase }: Props) {
                     </svg>
                     <span className="text-[10px] font-mono font-semibold" style={{ color: "#7c3aed" }}>{t("arcx.mod4Title")}</span>
                   </div>
-                  <p className="text-[8px] font-mono" style={{ color: "rgba(148,163,184,0.45)" }}>{t("arcx.mod4Desc")}</p>
+                  <p className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.65)" }}>{t("arcx.mod4Desc")}</p>
                   <div className="mt-2 flex items-center gap-1.5">
                     <span
                       className="w-1.5 h-1.5 rounded-full"
@@ -307,16 +307,16 @@ export function ArcxIntegration({ alerts, replayPhase }: Props) {
                         animation: mlAlerts.length > 0 ? "pulse 1s infinite" : "none",
                       }}
                     />
-                    <span className="text-[8px] font-mono" style={{ color: mlAlerts.length > 0 ? "#ff3b3b" : "rgba(124,58,237,0.5)" }}>
+                    <span className="text-[10px] font-mono font-semibold" style={{ color: mlAlerts.length > 0 ? "#ff3b3b" : "rgba(124,58,237,0.75)" }}>
                       {mlAlerts.length > 0 ? `${mlAlerts.length} ALERT` : "MONITORING"}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Flow arrow: Aegis → ARCX */}
+              {/* Flow arrow: StratosAI → ARCX */}
               <div className="flex items-center gap-2 my-4 px-1">
-                <div className="text-[8px] font-mono shrink-0" style={{ color: "rgba(124,58,237,0.5)" }}>AEGIS IDS</div>
+                <div className="text-[10px] font-mono shrink-0 font-semibold" style={{ color: "rgba(124,58,237,0.8)" }}>{t("arcx.flowLabel")}</div>
                 <div className="relative flex-1 h-px" style={{ background: "rgba(124,58,237,0.15)" }}>
                   {mlAlerts.length > 0 && (
                     <>
@@ -326,7 +326,7 @@ export function ArcxIntegration({ alerts, replayPhase }: Props) {
                     </>
                   )}
                 </div>
-                <div className="text-[8px] font-mono shrink-0" style={{ color: "rgba(124,58,237,0.5)" }}>
+                <div className="text-[10px] font-mono shrink-0 font-semibold" style={{ color: "rgba(124,58,237,0.8)" }}>
                   {t("arcx.flowLabel")}
                 </div>
               </div>
@@ -338,12 +338,12 @@ export function ArcxIntegration({ alerts, replayPhase }: Props) {
               >
                 <div className="flex items-center gap-2 px-3 py-2 border-b" style={{ borderColor: "rgba(124,58,237,0.1)" }}>
                   <div className="w-1 h-3" style={{ background: "rgba(124,58,237,0.7)", boxShadow: "0 0 4px rgba(124,58,237,0.5)" }} />
-                  <span className="text-[9px] font-mono tracking-widest" style={{ color: "rgba(124,58,237,0.7)" }}>
+                  <span className="text-[11px] font-mono tracking-widest font-semibold" style={{ color: "rgba(124,58,237,0.9)" }}>
                     {t("arcx.liveAlerts")}
                   </span>
                   {mlAlerts.length > 0 && (
                     <span
-                      className="ml-auto text-[8px] font-mono px-1.5 py-0.5"
+                      className="ml-auto text-[10px] font-mono px-1.5 py-0.5 font-semibold"
                       style={{ background: "rgba(124,58,237,0.15)", color: "#7c3aed" }}
                     >
                       {mlAlerts.length}
@@ -357,7 +357,7 @@ export function ArcxIntegration({ alerts, replayPhase }: Props) {
                       {(replayPhase === "running" || replayPhase === "draining") && (
                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#7c3aed", boxShadow: "0 0 6px #7c3aed", animation: "pulse 1.5s infinite" }} />
                       )}
-                      <span className="text-[9px] font-mono" style={{ color: "rgba(148,163,184,0.25)" }}>
+                      <span className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.5)" }}>
                         {replayPhase === "running" || replayPhase === "draining"
                           ? t("arcx.waiting")
                           : t("arcx.noAlerts")}
@@ -378,13 +378,13 @@ export function ArcxIntegration({ alerts, replayPhase }: Props) {
                           }}
                         >
                           <SeverityDot score={a.score} />
-                          <span className="text-[8px] font-mono px-1 py-0.5 shrink-0" style={{ background: `${color}22`, color }}>
+                          <span className="text-[10px] font-mono px-1 py-0.5 shrink-0 font-semibold" style={{ background: `${color}22`, color }}>
                             {label}
                           </span>
-                          <span className="text-[9px] font-mono truncate flex-1" style={{ color: "rgba(148,163,184,0.7)" }}>
+                          <span className="text-[11px] font-mono truncate flex-1" style={{ color: "rgba(148,163,184,0.85)" }}>
                             {a.src_ip} → {a.dst_ip}
                           </span>
-                          <span className="text-[8px] font-mono shrink-0 tabular-nums" style={{ color: "rgba(148,163,184,0.35)" }}>
+                          <span className="text-[10px] font-mono shrink-0 tabular-nums" style={{ color: "rgba(148,163,184,0.6)" }}>
                             {a.ts.slice(11, 19)}
                           </span>
                         </div>
@@ -398,10 +398,10 @@ export function ArcxIntegration({ alerts, replayPhase }: Props) {
 
           {/* Footer */}
           <div className="px-4 py-2 border-t shrink-0 flex items-center gap-4" style={{ borderColor: "rgba(124,58,237,0.08)" }}>
-            <span className="text-[9px] font-mono" style={{ color: "rgba(148,163,184,0.3)" }}>
+            <span className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.6)" }}>
               {t("arcx.footerLeft")}
             </span>
-            <span className="text-[9px] font-mono ml-auto" style={{ color: "rgba(124,58,237,0.4)" }}>
+            <span className="text-[10px] font-mono ml-auto" style={{ color: "rgba(124,58,237,0.65)" }}>
               {t("arcx.footerRight")}
             </span>
           </div>

@@ -46,7 +46,7 @@ function MatrixCell({ label, value, variant, size = "sm" }: CellProps) {
   return (
     <div className={`flex flex-col items-center justify-center ${padding} relative`}
       style={{ border: `1px solid ${s.border}`, background: s.bg, minWidth: size === "lg" ? "100px" : "72px" }}>
-      <span className="text-[9px] font-mono mb-1" style={{ color: s.label }}>{label}</span>
+      <span className="text-[10px] font-mono mb-1" style={{ color: s.label }}>{label}</span>
       <span className={`${fontSize} font-mono font-semibold tabular-nums`} style={{ color: s.val }}>{fmtN(value)}</span>
     </div>
   );
@@ -59,7 +59,7 @@ function EngineMatrix({ engine, data }: { engine: EngineDef; data: EngineEvaluat
         <div className="w-1.5 h-1.5" style={{ background: engine.color, boxShadow: `0 0 6px ${engine.color}` }} />
         <span className="section-label text-[9px]" style={{ color: engine.color }}>{engine.label}</span>
         {engine.mode === "ip" && (
-          <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(168,85,247,0.3)", background: "rgba(168,85,247,0.08)", color: "#a855f7" }}>IP-Level</span>
+          <span className="text-[9px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(168,85,247,0.3)", background: "rgba(168,85,247,0.08)", color: "#a855f7" }}>IP-Level</span>
         )}
       </div>
       <div className="grid grid-cols-4 gap-1">
@@ -99,15 +99,15 @@ function MetricBar({ label, xgbValue, commValue, xgbWins, invertWin }: MetricBar
 
   return (
     <div className="flex items-center gap-4 py-2 border-b last:border-0" style={{ borderColor: "rgba(0,212,255,0.05)" }}>
-      <span className="section-label w-16 shrink-0 text-[9px]" style={{ color: "rgba(148,163,184,0.85)" }}>{label}</span>
+      <span className="section-label w-20 shrink-0" style={{ color: "rgba(148,163,184,0.9)", fontSize: "0.68rem" }}>{label}</span>
 
       <div className="flex-1">
         <div className="flex items-center gap-1.5 mb-1">
-          <span className="text-[10px] font-mono font-semibold tabular-nums" style={{ color: "#ff3b3b" }}>{xgbValue.toFixed(2)}%</span>
+          <span className="text-[11px] font-mono font-semibold tabular-nums" style={{ color: "#ff3b3b" }}>{xgbValue.toFixed(2)}%</span>
           {isTie ? (
-            <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.1)", color: "#94a3b8" }}>{t("evaluation.tie")}</span>
+            <span className="text-[9px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.1)", color: "#94a3b8" }}>{t("evaluation.tie")}</span>
           ) : xgbActuallyWins ? (
-            <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(16,185,129,0.3)", background: "rgba(16,185,129,0.08)", color: "#10b981" }}>{t("evaluation.win")}</span>
+            <span className="text-[9px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(16,185,129,0.3)", background: "rgba(16,185,129,0.08)", color: "#10b981" }}>{t("evaluation.win")}</span>
           ) : null}
         </div>
         <div className="h-px w-full" style={{ background: "rgba(0,212,255,0.06)" }}>
@@ -117,9 +117,9 @@ function MetricBar({ label, xgbValue, commValue, xgbWins, invertWin }: MetricBar
 
       <div className="flex-1">
         <div className="flex items-center gap-1.5 mb-1">
-          <span className="text-[10px] font-mono font-semibold tabular-nums" style={{ color: "#00d4ff" }}>{commValue.toFixed(2)}%</span>
+          <span className="text-[11px] font-mono font-semibold tabular-nums" style={{ color: "#00d4ff" }}>{commValue.toFixed(2)}%</span>
           {isTie ? null : commActuallyWins ? (
-            <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.1)", color: "#94a3b8" }}>{t("evaluation.win")}</span>
+            <span className="text-[9px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.1)", color: "#94a3b8" }}>{t("evaluation.win")}</span>
           ) : null}
         </div>
         <div className="h-px w-full" style={{ background: "rgba(0,212,255,0.06)" }}>
@@ -336,7 +336,7 @@ export function EvaluationReport({ evaluation, scenario }: Props) {
               </span>
             )}
             {activeOtherEngines.length > 0 && (
-              <span className="ml-2 text-[8px] font-mono px-1.5 py-0.5" style={{ border: "1px solid rgba(16,185,129,0.3)", background: "rgba(16,185,129,0.08)", color: "#10b981" }}>
+              <span className="ml-2 text-[9px] font-mono px-1.5 py-0.5" style={{ border: "1px solid rgba(16,185,129,0.3)", background: "rgba(16,185,129,0.08)", color: "#10b981" }}>
                 +{activeOtherEngines.length} engine{activeOtherEngines.length > 1 ? "s" : ""}
               </span>
             )}
@@ -356,10 +356,10 @@ export function EvaluationReport({ evaluation, scenario }: Props) {
                   {scenario ? activeLabel : t("evaluation.mlEnsemble")}
                 </span>
                 {isWindowLevel && scenario && (
-                  <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(168,85,247,0.3)", background: "rgba(168,85,247,0.08)", color: "#a855f7" }}>Window</span>
+                  <span className="text-[9px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(168,85,247,0.3)", background: "rgba(168,85,247,0.08)", color: "#a855f7" }}>Window</span>
                 )}
                 {!isWindowLevel && activeMode === "ip" && scenario && (
-                  <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(168,85,247,0.3)", background: "rgba(168,85,247,0.08)", color: "#a855f7" }}>IP-Level</span>
+                  <span className="text-[9px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(168,85,247,0.3)", background: "rgba(168,85,247,0.08)", color: "#a855f7" }}>IP-Level</span>
                 )}
               </div>
               {isWindowLevel ? (
@@ -394,7 +394,7 @@ export function EvaluationReport({ evaluation, scenario }: Props) {
                 <div className="w-1.5 h-1.5" style={{ background: "#00d4ff", boxShadow: "0 0 6px #00d4ff" }} />
                 <span className="section-label text-[9px]" style={{ color: "#00d4ff" }}>{t("evaluation.snortCommunity")}</span>
                 {isWindowLevel && scenario?.community.confusion && (
-                  <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(168,85,247,0.3)", background: "rgba(168,85,247,0.08)", color: "#a855f7" }}>IP-Level</span>
+                  <span className="text-[9px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(168,85,247,0.3)", background: "rgba(168,85,247,0.08)", color: "#a855f7" }}>IP-Level</span>
                 )}
               </div>
               {isWindowLevel && !scenario?.community.confusion ? (
@@ -452,7 +452,7 @@ export function EvaluationReport({ evaluation, scenario }: Props) {
             </div>
           )}
 
-          <p className="section-label text-[9px] pt-2 border-t" style={{ color: "rgba(148,163,184,0.5)", borderColor: "rgba(0,212,255,0.05)" }}>
+          <p className="section-label pt-2 border-t" style={{ color: "rgba(148,163,184,0.7)", borderColor: "rgba(0,212,255,0.05)", fontSize: "0.68rem" }}>
             {scenario
               ? t("evaluation.frozenBaseline", { dataset: scenario.display.dataset_label })
               : t("evaluation.flowsEvaluated", { count: evaluation.total_flows.toLocaleString("en-US") })}

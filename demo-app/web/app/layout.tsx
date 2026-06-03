@@ -18,7 +18,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Aegis IDS — Demo",
+  title: "StratosAI — Demo",
   description: "Real-time intrusion detection dashboard — ML Ensemble + Community Rules",
 };
 

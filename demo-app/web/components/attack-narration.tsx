@@ -197,8 +197,8 @@ export function AttackNarration({ alerts, replayPhase, replayStartedAt, metricLe
         />
 
         <span
-          className="text-[8px] font-mono px-1.5 py-0.5 shrink-0"
-          style={{ background: `${color}1a`, color, letterSpacing: "0.08em", border: `1px solid ${color}30` }}
+          className="text-[10px] font-mono px-1.5 py-0.5 shrink-0 font-semibold"
+          style={{ background: `${color}1a`, color, letterSpacing: "0.08em", border: `1px solid ${color}40` }}
         >
           {label}
         </span>

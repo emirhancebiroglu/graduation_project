@@ -137,25 +137,25 @@ function ScenarioCard({
       </div>
 
       {/* description */}
-      <p className="text-[10px] mb-2 leading-relaxed" style={{ color: "rgba(148,163,184,0.75)" }}>
+      <p className="text-[11px] mb-2 leading-relaxed" style={{ color: "rgba(148,163,184,0.9)" }}>
         {description}
       </p>
 
       {/* model line */}
       <p
-        className="text-[9px] font-mono mb-1.5 tracking-wider uppercase"
-        style={{ color: active ? `${color}cc` : "rgba(0,212,255,0.55)" }}
+        className="text-[10px] font-mono mb-1.5 tracking-wider uppercase"
+        style={{ color: active ? `${color}dd` : "rgba(0,212,255,0.7)" }}
       >
         {modelLine}
       </p>
 
       {/* generalization chip */}
       <div
-        className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-mono"
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-mono"
         style={{
-          border: `1px solid ${color}40`,
-          background: `${color}10`,
-          color: `${color}dd`,
+          border: `1px solid ${color}60`,
+          background: `${color}15`,
+          color: `${color}ee`,
           letterSpacing: "0.05em",
         }}
       >

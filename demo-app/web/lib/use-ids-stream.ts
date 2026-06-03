@@ -155,7 +155,7 @@ export function useIdsStream(): IdsStreamState {
             handleEvaluation(msg.data);
           } else if (msg.type === "alert") {
             const alert = msg.data as Alert;
-            if (alert.engine !== "community") console.log("[aegis-debug] alert", alert.engine, alert.src_ip, "score=", alert.score);
+            if (alert.engine !== "community") console.log("[stratosai-debug] alert", alert.engine, alert.src_ip, "score=", alert.score);
             const frozen = replayPhaseRef.current === "draining" || replayPhaseRef.current === "complete";
             // During draining/complete: still ingest ML alerts (window-level engines may broadcast
             // during the drain window, after snort exits). Drop community noise when frozen.
@@ -198,7 +198,7 @@ export function useIdsStream(): IdsStreamState {
               }, FLUSH_INTERVAL_MS);
             }
           } else if (msg.type === "alerts_updated") {
-            console.log("[aegis-debug] alerts_updated received, count=", (msg.data as Alert[]).length);
+            console.log("[stratosai-debug] alerts_updated received, count=", (msg.data as Alert[]).length);
             // Retroactive score patch for window-level alerts (sent after Snort exits)
             const updated = msg.data as Alert[];
             updated.forEach((upd: Alert) => {

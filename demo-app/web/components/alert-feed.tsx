@@ -52,7 +52,7 @@ function SeverityChip({ alert }: { alert: Alert }): React.ReactElement {
   const sevLabel = t(`alerts.sev.${sev.toLowerCase()}`);
   return (
     <span
-      className="inline-flex items-center gap-1 text-[8px] font-mono px-1.5 py-0.5 font-bold"
+      className="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 font-bold"
       style={{ border: `1px solid ${st.border}`, background: st.bg, color: st.color, letterSpacing: "0.06em" }}
     >
       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: st.dot, boxShadow: `0 0 4px ${st.dot}` }} />
@@ -94,7 +94,7 @@ function AttackTypeBadge({ alert }: { alert: Alert }): React.ReactElement {
   const st = _TYPE_STYLE[type];
   return (
     <span
-      className="text-[8px] font-mono px-1.5 py-0.5 font-bold shrink-0"
+      className="text-[9px] font-mono px-1.5 py-0.5 font-bold shrink-0"
       style={{ border: `1px solid ${st.border}`, background: st.bg, color: st.color, letterSpacing: "0.04em" }}
     >
       {type}
@@ -132,14 +132,14 @@ function GtBadge({ gt }: { gt: string | null | undefined }): React.ReactNode {
   if (!gt) return null;
   if (gt === "attack") {
     return (
-      <span className="text-[8px] font-mono px-1 py-0.5 font-bold" style={{ border: "1px solid rgba(16,185,129,0.4)", background: "rgba(16,185,129,0.12)", color: "#10b981", letterSpacing: "0.05em" }}>
+      <span className="text-[9px] font-mono px-1 py-0.5 font-bold" style={{ border: "1px solid rgba(16,185,129,0.4)", background: "rgba(16,185,129,0.12)", color: "#10b981", letterSpacing: "0.05em" }}>
         {t("alerts.gt.realAttack")}
       </span>
     );
   }
   if (gt === "benign") {
     return (
-      <span className="text-[8px] font-mono px-1 py-0.5 font-bold" style={{ border: "1px solid rgba(255,59,59,0.35)", background: "rgba(255,59,59,0.1)", color: "#ff3b3b", letterSpacing: "0.05em" }}>
+      <span className="text-[9px] font-mono px-1 py-0.5 font-bold" style={{ border: "1px solid rgba(255,59,59,0.35)", background: "rgba(255,59,59,0.1)", color: "#ff3b3b", letterSpacing: "0.05em" }}>
         {t("alerts.gt.falseAlarm")}
       </span>
     );
@@ -162,7 +162,7 @@ function mitreBadge(technique: string | null | undefined): React.ReactNode {
   return (
     <span
       title={name}
-      className="text-[8px] font-mono px-1 py-0.5 font-bold tabular-nums"
+      className="text-[9px] font-mono px-1 py-0.5 font-bold tabular-nums"
       style={{
         border: "1px solid rgba(139,92,246,0.35)",
         background: "rgba(139,92,246,0.08)",
@@ -180,13 +180,13 @@ function IfBadge({ ifLabel }: { ifLabel: string | null | undefined }): React.Rea
   if (!ifLabel) return null;
   if (ifLabel === "anomaly_candidate") {
     return (
-      <span className="text-[8px] font-mono px-1 py-0.5 font-bold" style={{ border: "1px solid rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.1)", color: "#fbbf24", letterSpacing: "0.05em" }}>
+      <span className="text-[9px] font-mono px-1 py-0.5 font-bold" style={{ border: "1px solid rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.1)", color: "#fbbf24", letterSpacing: "0.05em" }}>
         {t("alerts.anomaly.anomaly")}
       </span>
     );
   }
   return (
-    <span className="text-[8px] font-mono px-1 py-0.5 font-bold" style={{ border: "1px solid rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.1)", color: "rgba(148,163,184,0.85)", letterSpacing: "0.05em" }}>
+    <span className="text-[9px] font-mono px-1 py-0.5 font-bold" style={{ border: "1px solid rgba(148,163,184,0.5)", background: "rgba(148,163,184,0.1)", color: "rgba(148,163,184,0.85)", letterSpacing: "0.05em" }}>
       {t("alerts.anomaly.known")}
     </span>
   );
@@ -334,12 +334,12 @@ export function AlertFeed({ alerts, engineAlerts, replayPhase, onClear, activeEn
       {/* Table */}
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-auto min-h-0">
         {/* Header row */}
-        <div className="grid sticky top-0 gap-2 px-2 py-1.5 text-[9px] font-mono border-b" style={{
-          gridTemplateColumns: "72px 90px 72px 1fr 1fr 50px 60px 1fr",
+        <div className="grid sticky top-0 gap-2 px-2 py-1.5 text-[10px] font-mono border-b" style={{
+          gridTemplateColumns: "72px 90px 80px 1fr 1fr 50px 65px 1fr",
           background: "#0f1318",
           borderColor: "rgba(0,212,255,0.08)",
-          color: "rgba(0,212,255,0.35)",
-          letterSpacing: "0.12em",
+          color: "rgba(0,212,255,0.6)",
+          letterSpacing: "0.1em",
         }}>
           <span>{t("alerts.col.time")}</span>
           <span>{t("alerts.col.severity")}</span>
@@ -362,12 +362,12 @@ export function AlertFeed({ alerts, engineAlerts, replayPhase, onClear, activeEn
                 onClick={() => handleSelectAlert(a)}
                 className="ids-row grid gap-2 px-2 py-2 cursor-pointer transition-all"
                 style={{
-                  gridTemplateColumns: "72px 90px 72px 1fr 1fr 50px 60px 1fr",
+                  gridTemplateColumns: "72px 90px 80px 1fr 1fr 50px 65px 1fr",
                   borderLeft: `2px solid ${color}33`,
                   background: "transparent",
                 }}
               >
-                <span className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.85)" }}>
+                <span className="text-[11px] font-mono" style={{ color: "rgba(148,163,184,0.9)" }}>
                   {new Date(a.ts).toLocaleTimeString()}
                 </span>
                 <span className="flex items-center">
@@ -376,26 +376,26 @@ export function AlertFeed({ alerts, engineAlerts, replayPhase, onClear, activeEn
                 <span className="flex items-center">
                   <GtBadge gt={a.ground_truth} />
                 </span>
-                <span className="text-[10px] font-mono truncate" style={{ color }}>
+                <span className="text-[11px] font-mono truncate" style={{ color }}>
                   {a.src_ip}:{a.src_port}
                 </span>
-                <span className="text-[10px] font-mono truncate" style={{ color: "rgba(148,163,184,0.95)" }}>
+                <span className="text-[11px] font-mono truncate" style={{ color: "rgba(148,163,184,0.95)" }}>
                   {a.dst_ip}:{a.dst_port}
                 </span>
-                <span className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.85)" }}>{a.proto}</span>
-                <span className="text-[10px] font-mono tabular-nums" style={{ color }}>{scoreLabel(a)}</span>
+                <span className="text-[11px] font-mono" style={{ color: "rgba(148,163,184,0.9)" }}>{a.proto}</span>
+                <span className="text-[11px] font-mono tabular-nums font-semibold" style={{ color }}>{scoreLabel(a)}</span>
                 <span className="flex items-center gap-1.5 min-w-0">
                   <AttackTypeBadge alert={a} />
                   {mitreBadge(a.mitre_technique)}
                   {windowCount && windowCount > 1 && (
                     <span
-                      className="text-[8px] font-mono px-1 py-0.5 shrink-0"
+                      className="text-[9px] font-mono px-1 py-0.5 shrink-0"
                       style={{ border: `1px solid ${color}40`, background: `${color}12`, color }}
                     >
                       {t("detectionSummary.windowCount", { count: windowCount })}
                     </span>
                   )}
-                  <span className="text-[10px] font-mono truncate" style={{ color: "rgba(148,163,184,0.85)" }}>{a.msg}</span>
+                  <span className="text-[11px] font-mono truncate" style={{ color: "rgba(148,163,184,0.9)" }}>{a.msg}</span>
                 </span>
               </div>
             );
@@ -470,7 +470,7 @@ export function AlertFeed({ alerts, engineAlerts, replayPhase, onClear, activeEn
                     <span className="flex items-center gap-2 flex-wrap">
                       {mitreBadge(selected.mitre_technique)}
                       {selected.mitre_tactic && (
-                        <span className="text-[8px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(139,92,246,0.2)", background: "rgba(139,92,246,0.05)", color: "rgba(167,139,250,0.6)" }}>
+                        <span className="text-[9px] font-mono px-1 py-0.5" style={{ border: "1px solid rgba(139,92,246,0.2)", background: "rgba(139,92,246,0.05)", color: "rgba(167,139,250,0.6)" }}>
                           {selected.mitre_tactic}
                         </span>
                       )}

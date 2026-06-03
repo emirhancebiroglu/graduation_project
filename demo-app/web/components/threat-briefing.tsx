@@ -147,8 +147,8 @@ export function ThreatBriefing({ replayPhase, scenarios, activeScenario, onSelec
     ? "SİBER TEHDIT TABLOSU"
     : "CYBER THREAT LANDSCAPE";
   const subheading = locale === "tr"
-    ? "Neden Aegis IDS gerekli?"
-    : "Why Aegis IDS?";
+    ? "Neden StratosAI gerekli?"
+    : "Why StratosAI?";
   const ctaLabel = locale === "tr"
     ? "Analizi başlatmak için ▶ BAŞLAT butonuna basın"
     : "Press ▶ RUN ANALYSIS to start the demo";
@@ -315,7 +315,7 @@ export function ThreatBriefing({ replayPhase, scenarios, activeScenario, onSelec
         {/* Scenario selector */}
         {scenarios && scenarios.length > 0 && onSelectScenario && (
           <div className="mt-10 flex flex-col items-center gap-2">
-            <span className="text-[8px] font-mono tracking-[0.2em] uppercase" style={{ color: "rgba(0,212,255,0.3)" }}>
+            <span className="text-[10px] font-mono tracking-[0.2em] uppercase" style={{ color: "rgba(0,212,255,0.6)" }}>
               {locale === "tr" ? "senaryo seçin" : "select scenario"}
             </span>
             <div className="flex flex-wrap justify-center gap-2">

@@ -1,6 +1,6 @@
 {
   "header": {
-    "title": "Aegis IDS",
+    "title": "StratosAI",
     "subtitle": "SİBER TEHDİT TESPİT SİSTEMİ",
     "demoMode": "DEMO MODU",
     "runAnalysis": "ANALİZİ BAŞLAT",
@@ -22,7 +22,7 @@
     "countSuffix": "alarm · açıklama için satıra tıklayın"
   },
   "footer": {
-    "tag": "AEGIS IDS // CIC-IDS2017 WEDNESDAY // ML TOPLULUĞU + COMMUNITY KURALLARI"
+    "tag": "STRATOSAI // CIC-IDS2017 WEDNESDAY // ML TOPLULUĞU + COMMUNITY KURALLARI"
   },
   "detectionSummary": {
     "title": "TESPİT ÖZETİ",
@@ -212,7 +212,7 @@
     "bruteforce": "{src}, {dst} adresine SSH kaba kuvvet uyguluyor",
     "dos_agg": "DDoS koordinasyonu tespit edildi — kaynak: {src}",
     "community": "Snort3 imza eşleşmesi: {src} → {dst}",
-    "detected": "Aegis {elapsed}s içinde tespit etti",
+    "detected": "StratosAI {elapsed}s içinde tespit etti",
     "score": "Skor",
     "dos_agg_window": "DDoS koordinasyonu — {src} ({windows} alarm penceresi)",
     "portscan_window": "{src} port tarama tespit edildi ({windows} pencere)",
@@ -222,10 +222,10 @@
   "arcx": {
     "buttonLabel": "ENTEGRASYON",
     "title": "ARCX PLATFORM ENTEGRASYONu",
-    "subtitle": "Aegis, mevcut ARCX modüllerine dördüncü katman olarak eklenir",
+    "subtitle": "StratosAI, mevcut ARCX modüllerine dördüncü katman olarak eklenir",
     "platformLabel": "ARCX AIOps Dashboard",
     "existingModules": "MEVCUT MODÜLLER",
-    "newModule": "YENİ — AEGİS",
+    "newModule": "YENİ — STRATOSAI",
     "mod1Title": "Sunucu Performansı",
     "mod1Desc": "CPU · Bellek · Disk · Süreç izleme",
     "mod2Title": "Ağ Kesintisi",
@@ -234,11 +234,11 @@
     "mod3Desc": "Uptime · Yanıt süresi · Eşik aşımı",
     "mod4Title": "Güvenlik Tehdidi",
     "mod4Desc": "DoS · Port Tarama · Botnet · DDoS · Kaba Kuvvet",
-    "mod4Badge": "AEGİS IDS",
-    "liveAlerts": "CANLI AEGİS ALARMLARI → ARCX",
+    "mod4Badge": "STRATOSAI",
+    "liveAlerts": "CANLI STRATOSAI ALARMLARI → ARCX",
     "noAlerts": "Alarm bekleniyor… analizi başlatın",
     "waiting": "ML tespiti bekleniyor…",
-    "flowLabel": "AEGİS → ARCX",
+    "flowLabel": "STRATOSAI → ARCX",
     "footerLeft": "REST API · WebHook · Syslog entegrasyon desteği",
     "footerRight": "OEM / White-label hazır"
   },

@@ -6,7 +6,7 @@ import en from "./messages/en.json";
 export type Locale = "tr" | "en";
 
 const DICTIONARIES = { tr, en } as const;
-const STORAGE_KEY = "aegis.locale";
+const STORAGE_KEY = "stratosai.locale";
 const DEFAULT_LOCALE: Locale = "tr";
 
 type Dict = typeof tr;

@@ -35,11 +35,11 @@ function FpBar({ label, value, max, color }: { label: string; value: number; max
   const pct = Math.min((value / max) * 100, 100);
   return (
     <div className="flex items-center gap-3">
-      <span className="text-[10px] font-mono w-20 shrink-0" style={{ color: "rgba(148,163,184,0.9)" }}>{label}</span>
+      <span className="text-[11px] font-mono w-20 shrink-0" style={{ color: "rgba(148,163,184,0.95)" }}>{label}</span>
       <div className="flex-1 h-3 rounded-sm overflow-hidden" style={{ background: "rgba(0,212,255,0.06)" }}>
         <div style={{ width: `${pct}%`, height: "100%", background: color, boxShadow: `0 0 8px ${color}40`, transition: "width 0.8s ease" }} />
       </div>
-      <span className="text-xs font-mono font-semibold tabular-nums w-16 text-right" style={{ color }}>{fmtN(value)}</span>
+      <span className="text-[12px] font-mono font-semibold tabular-nums w-16 text-right" style={{ color }}>{fmtN(value)}</span>
     </div>
   );
 }
@@ -166,7 +166,7 @@ export function ImpactSummary({ evaluation, replayPhase, pcapProgress, frozenMet
                       {t("roi.alertVolumeComparison")}
                     </p>
                     <div className="space-y-2">
-                      <FpBar label={t("roi.mlEnsemble")} value={liveMlAlerts} max={Math.max(liveCommAlerts, 1)} color="#64748b" />
+                      <FpBar label={t("roi.mlEnsemble")} value={liveMlAlerts} max={Math.max(liveCommAlerts, 1)} color="#94a3b8" />
                       <FpBar label={t("roi.community")} value={liveCommAlerts} max={Math.max(liveCommAlerts, 1)} color="#ff3b3b" />
                     </div>
                     <div className="text-right pt-1">
@@ -205,7 +205,7 @@ export function ImpactSummary({ evaluation, replayPhase, pcapProgress, frozenMet
                   {t("roi.falseAlarmComparison")}
                 </p>
                 <div className="space-y-2">
-                  <FpBar label={t("roi.mlEnsemble")} value={liveXgbFp} max={commFP} color="#64748b" />
+                  <FpBar label={t("roi.mlEnsemble")} value={liveXgbFp} max={commFP} color="#94a3b8" />
                   <FpBar label={t("roi.community")} value={liveCommFp} max={commFP} color="#ff3b3b" />
                 </div>
                 <div className="text-right pt-1">
@@ -286,7 +286,7 @@ export function ImpactSummary({ evaluation, replayPhase, pcapProgress, frozenMet
                     {t("roi.alertVolumeComparison")}
                   </p>
                   <div className="space-y-2">
-                    <FpBar label={t("roi.mlEnsemble")} value={mlAlerts} max={Math.max(commAlerts, 1)} color="#64748b" />
+                    <FpBar label={t("roi.mlEnsemble")} value={mlAlerts} max={Math.max(commAlerts, 1)} color="#94a3b8" />
                     <FpBar label={t("roi.community")} value={commAlerts} max={Math.max(commAlerts, 1)} color="#ff3b3b" />
                   </div>
                   <div className="text-right pt-1">
@@ -334,7 +334,7 @@ export function ImpactSummary({ evaluation, replayPhase, pcapProgress, frozenMet
                 {t("roi.falseAlarmComparison")}
               </p>
               <div className="space-y-2">
-                <FpBar label={t("roi.mlEnsemble")} value={completeXgbFP} max={Math.max(completeCommFP, 1)} color="#64748b" />
+                <FpBar label={t("roi.mlEnsemble")} value={completeXgbFP} max={Math.max(completeCommFP, 1)} color="#94a3b8" />
                 <FpBar label={t("roi.community")} value={completeCommFP} max={Math.max(completeCommFP, 1)} color="#ff3b3b" />
               </div>
               <div className="text-right pt-1">

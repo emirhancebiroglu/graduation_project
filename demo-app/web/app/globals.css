@@ -245,10 +245,10 @@
 /* Section label style */
 .section-label {
   font-family: var(--font-ibm-plex-mono), monospace;
-  font-size: 0.6rem;
-  letter-spacing: 0.18em;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(0, 212, 255, 0.75);
+  color: rgba(0, 212, 255, 0.85);
 }
 
 /* Display font for big numbers */

@@ -56,29 +56,29 @@ function ModelCard({ m, active }: { m: ModelEntry; active: boolean }) {
           {name.toUpperCase()}
         </span>
         {active && (
-          <span className="text-[8px] font-mono px-1 py-0.5 shrink-0" style={{ border: `1px solid ${c.text}`, background: `${c.text}20`, color: c.text }}>
+          <span className="text-[9px] font-mono px-1 py-0.5 shrink-0 font-semibold" style={{ border: `1px solid ${c.text}`, background: `${c.text}20`, color: c.text }}>
             ACTIVE
           </span>
         )}
         <span className="ml-auto text-[10px] font-mono" style={{ color: "#10b981" }}>✓</span>
       </div>
 
-      <p className="text-[9px] font-mono leading-tight" style={{ color: "rgba(148,163,184,0.75)" }}>
+      <p className="text-[10px] font-mono leading-tight" style={{ color: "rgba(148,163,184,0.85)" }}>
         {attack}
       </p>
 
       <div className="flex gap-3 mt-auto pt-1 border-t" style={{ borderColor: "rgba(255,255,255,0.04)" }}>
         <div>
-          <p className="text-[8px] font-mono" style={{ color: "rgba(148,163,184,0.45)" }}>{t("coverage.recall")}</p>
-          <p className="text-[11px] font-mono font-semibold" style={{ color: c.text }}>{m.recall}</p>
+          <p className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.65)" }}>{t("coverage.recall")}</p>
+          <p className="text-[13px] font-mono font-semibold" style={{ color: c.text }}>{m.recall}</p>
         </div>
         <div>
-          <p className="text-[8px] font-mono" style={{ color: "rgba(148,163,184,0.45)" }}>{t("coverage.precision")}</p>
-          <p className="text-[11px] font-mono font-semibold" style={{ color: c.text }}>{m.precision}</p>
+          <p className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.65)" }}>{t("coverage.precision")}</p>
+          <p className="text-[13px] font-mono font-semibold" style={{ color: c.text }}>{m.precision}</p>
         </div>
         <div className="ml-auto text-right">
-          <p className="text-[8px] font-mono" style={{ color: "rgba(148,163,184,0.45)" }}>{t("coverage.dataset")}</p>
-          <p className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.7)" }}>{m.dataset}</p>
+          <p className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.65)" }}>{t("coverage.dataset")}</p>
+          <p className="text-[11px] font-mono" style={{ color: "rgba(148,163,184,0.85)" }}>{m.dataset}</p>
         </div>
       </div>
     </div>
@@ -132,9 +132,9 @@ export function DetectionCoverage({ scenario }: { scenario?: ScenarioPayload | n
         </svg>
         {/* Rotated label */}
         <span
-          className="text-[8px] font-mono tracking-widest"
+          className="text-[9px] font-mono tracking-widest"
           style={{
-            color: "rgba(16,185,129,0.7)",
+            color: "rgba(16,185,129,0.9)",
             writingMode: "vertical-rl",
             textOrientation: "mixed",
             transform: "rotate(180deg)",
@@ -196,10 +196,10 @@ export function DetectionCoverage({ scenario }: { scenario?: ScenarioPayload | n
 
           {/* Footer */}
           <div className="px-4 py-2 border-t shrink-0 flex items-center gap-4" style={{ borderColor: "rgba(16,185,129,0.08)" }}>
-            <span className="text-[9px] font-mono" style={{ color: "rgba(148,163,184,0.35)" }}>
+            <span className="text-[10px] font-mono" style={{ color: "rgba(148,163,184,0.6)" }}>
               {t("coverage.footerEvaluated")}
             </span>
-            <span className="text-[9px] font-mono ml-auto" style={{ color: "rgba(16,185,129,0.4)" }}>
+            <span className="text-[10px] font-mono ml-auto" style={{ color: "rgba(16,185,129,0.7)" }}>
               {t("coverage.footerCriteriaMet")}
             </span>
           </div>

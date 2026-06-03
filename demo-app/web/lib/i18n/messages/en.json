@@ -1,6 +1,6 @@
 {
   "header": {
-    "title": "Aegis IDS",
+    "title": "StratosAI",
     "subtitle": "INTRUSION DETECTION SYSTEM",
     "demoMode": "DEMO MODE",
     "runAnalysis": "RUN ANALYSIS",
@@ -22,7 +22,7 @@
     "countSuffix": "alerts · click row to explain"
   },
   "footer": {
-    "tag": "AEGIS IDS // CIC-IDS2017 WEDNESDAY // ML ENSEMBLE + COMMUNITY RULES"
+    "tag": "STRATOSAI // CIC-IDS2017 WEDNESDAY // ML ENSEMBLE + COMMUNITY RULES"
   },
   "detectionSummary": {
     "title": "DETECTION SUMMARY",
@@ -212,7 +212,7 @@
     "bruteforce": "{src} brute-forcing SSH on {dst}",
     "dos_agg": "DDoS coordination detected — source: {src}",
     "community": "Snort3 signature match: {src} → {dst}",
-    "detected": "Aegis detected in {elapsed}s",
+    "detected": "StratosAI detected in {elapsed}s",
     "score": "Score",
     "dos_agg_window": "DDoS coordination — {src} ({windows} alert windows)",
     "portscan_window": "{src} port scan detected ({windows} windows)",
@@ -222,10 +222,10 @@
   "arcx": {
     "buttonLabel": "INTEGRATION",
     "title": "ARCX PLATFORM INTEGRATION",
-    "subtitle": "Aegis integrates as a fourth layer alongside existing ARCX modules",
+    "subtitle": "StratosAI integrates as a fourth layer alongside existing ARCX modules",
     "platformLabel": "ARCX AIOps Dashboard",
     "existingModules": "EXISTING MODULES",
-    "newModule": "NEW — AEGIS",
+    "newModule": "NEW — STRATOSAI",
     "mod1Title": "Server Performance",
     "mod1Desc": "CPU · Memory · Disk · Process monitoring",
     "mod2Title": "Network Outage",
@@ -234,11 +234,11 @@
     "mod3Desc": "Uptime · Response time · Threshold breach",
     "mod4Title": "Security Threat",
     "mod4Desc": "DoS · Port Scan · Botnet · DDoS · Brute Force",
-    "mod4Badge": "AEGIS IDS",
-    "liveAlerts": "LIVE AEGIS ALERTS → ARCX",
+    "mod4Badge": "STRATOSAI",
+    "liveAlerts": "LIVE STRATOSAI ALERTS → ARCX",
     "noAlerts": "Awaiting alerts… start analysis",
     "waiting": "Waiting for ML detections…",
-    "flowLabel": "AEGIS → ARCX",
+    "flowLabel": "STRATOSAI → ARCX",
     "footerLeft": "REST API · WebHook · Syslog integration support",
     "footerRight": "OEM / White-label ready"
   },

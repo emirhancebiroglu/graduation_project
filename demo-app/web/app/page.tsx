@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import type { Engine, Alert, ScenarioKey, ScenarioPayload } from "@/lib/types";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const SCENARIO_STORAGE_KEY = "aegis.scenario";
+const SCENARIO_STORAGE_KEY = "stratosai.scenario";
 
 async function startReplay(scenario: ScenarioKey): Promise<void> {
   const res = await fetch(`${API}/api/replay/start`, {
@@ -490,7 +490,7 @@ export default function Page() {
 
       {/* Footer */}
       <footer className="px-6 py-2 flex items-center justify-between border-t" style={{ borderColor: "rgba(0,212,255,0.08)", background: "rgba(10,12,15,0.9)" }}>
-        <span className="section-label" style={{ color: "rgba(0,212,255,0.55)" }}>
+        <span className="section-label" style={{ color: "rgba(0,212,255,0.8)" }}>
           {t("footer.tag")}
         </span>
         {evaluation && (

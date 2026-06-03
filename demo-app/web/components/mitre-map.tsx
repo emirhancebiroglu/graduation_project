@@ -89,12 +89,12 @@ export function MitreMap({ alerts }: Props) {
           <rect x="0.5" y="6.5" width="4" height="4" stroke="#a78bfa" strokeWidth="0.8" fill="rgba(139,92,246,0.15)" />
           <rect x="6.5" y="6.5" width="4" height="4" stroke="#a78bfa" strokeWidth="0.8" fill="rgba(139,92,246,0.15)" />
         </svg>
-        <span className="text-[8px] font-mono tracking-widest" style={{ color: "rgba(139,92,246,0.75)", letterSpacing: "0.15em" }}>
+        <span className="text-[9px] font-mono tracking-widest" style={{ color: "rgba(139,92,246,0.75)", letterSpacing: "0.15em" }}>
           {t("mitre.buttonLabel")}
         </span>
         {totalDetected > 0 && (
           <span
-            className="text-[8px] font-mono px-1 py-0.5 tabular-nums"
+            className="text-[9px] font-mono px-1 py-0.5 tabular-nums"
             style={{ background: "rgba(139,92,246,0.2)", color: "#a78bfa" }}
           >
             {totalDetected}
@@ -167,7 +167,7 @@ export function MitreMap({ alerts }: Props) {
                         className="px-2 py-1 text-center"
                         style={{ borderBottom: `2px solid ${tacticColor}`, background: `${tacticColor}10` }}
                       >
-                        <span className="text-[8px] font-mono tracking-widest font-bold" style={{ color: tacticColor, letterSpacing: "0.12em" }}>
+                        <span className="text-[9px] font-mono tracking-widest font-bold" style={{ color: tacticColor, letterSpacing: "0.12em" }}>
                           {t(`mitre.tactics.${tactic}`)}
                         </span>
                       </div>
@@ -195,7 +195,7 @@ export function MitreMap({ alerts }: Props) {
                                 {tech.id}
                               </span>
                               <span
-                                className="text-[8px] font-mono px-1 py-0.5"
+                                className="text-[9px] font-mono px-1 py-0.5"
                                 style={{
                                   background: active ? `${tech.color}22` : "rgba(148,163,184,0.06)",
                                   color: active ? tech.color : "rgba(148,163,184,0.25)",
@@ -234,7 +234,7 @@ export function MitreMap({ alerts }: Props) {
 
           {/* Footer */}
           <div className="px-5 py-1.5 border-t flex items-center" style={{ borderColor: "rgba(139,92,246,0.08)" }}>
-            <span className="text-[8px] font-mono" style={{ color: "rgba(148,163,184,0.25)" }}>{t("mitre.footerNote")}</span>
+            <span className="text-[9px] font-mono" style={{ color: "rgba(148,163,184,0.55)" }}>{t("mitre.footerNote")}</span>
           </div>
         </div>
       )}
